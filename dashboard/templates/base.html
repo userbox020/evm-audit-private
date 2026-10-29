@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Watchboard{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='venus-states.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='overview.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='ops.css') }}">
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='refresh.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='wallets.js') }}" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}" data-refresh-interval="60000">
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="mast">
+    <a href="/" class="brand"><span class="brand-mark" aria-hidden="true">◒</span><span>Watchboard<small>LOCAL EVIDENCE / NO ON-CHAIN ACTIONS</small></span></a>
+    <div class="mast-actions"><nav aria-label="Primary navigation"><a href="/">Overview</a><a href="/targets"{% if request.path == '/targets' %} aria-current="page"{% endif %}>Targets</a><a href="/targets/history"{% if request.path == '/targets/history' or request.path.startswith('/targets/history/') %} aria-current="page"{% endif %}>History</a><a href="/inventory"{% if request.path == '/inventory' %} aria-current="page"{% endif %}>Inventory</a><a href="/liquidity"{% if request.path == '/liquidity' %} aria-current="page"{% endif %}>Liquidity Paths</a><a href="/findings"{% if request.path == '/findings' %} aria-current="page"{% endif %}>Findings</a><a href="/canary">Re-arm Canary</a><a href="/#ops-title">Ops panels</a><a href="/jobs"{% if request.path == '/jobs' %} aria-current="page"{% endif %}>Jobs</a><a href="/alarms">Alarms</a><a href="/healthz">Source check</a></nav><button class="refresh-toggle" type="button" data-theme-toggle aria-pressed="false" title="Switch to the light theme">Light mode</button><button class="refresh-toggle" type="button" data-refresh-toggle aria-pressed="false">Pause refresh</button></div>
+  </header>
+  <main id="content" tabindex="-1">{% block content %}{% endblock %}</main>
+  <footer><span>Local evidence view</span><span>No on-chain signing, broadcast, or order execution · local watchlist edits and read-only balance collection available</span></footer>
+</body>
+</html>

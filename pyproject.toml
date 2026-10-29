@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evm-audit-cli"
+version = "0.1.0"
+description = "Profile-based EVM smart contract audit runner and report generator"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "EVM Audit CLI" }]
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6.0"]
+
+[project.scripts]
+evm-audit = "evm_audit_cli.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

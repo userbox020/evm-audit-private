@@ -1,0 +1,36 @@
+/* Overview hierarchy: current operational evidence first; archives stay available in native disclosure. */
+.now-panel,.action-strip,.secondary-section{margin:28px 0;border:1px solid var(--line);background:var(--panel-translucent)}
+.now-panel{padding:clamp(20px,4vw,42px);border-top:5px solid var(--blue);box-shadow:10px 10px 0 var(--shadow-soft)}
+.watch-headline{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(220px,.7fr);gap:28px;align-items:end;padding:24px 0;border-bottom:1px solid var(--line)}
+.watch-headline h3,.action-strip h2{font:700 clamp(28px,4vw,45px)/1.03 Georgia,serif;letter-spacing:-.04em;margin:5px 0}.watch-headline p{margin:0;color:var(--muted)}
+.watch-posture{padding:15px 18px!important;background:var(--info-bg);border-left:3px solid var(--blue)}.needs-review .watch-posture{background:var(--warn-bg);border-left-color:var(--amber)}
+.evidence-grid,.funnel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;margin:22px 0 0;background:var(--line);border:1px solid var(--line)}
+.evidence-grid>div,.funnel-grid>div{background:var(--card);padding:13px 15px}.evidence-grid dt,.funnel-grid dt{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.evidence-grid dd,.funnel-grid dd{margin:5px 0 0;font-weight:700;overflow-wrap:anywhere}.evidence-grid .mismatch{background:var(--warn-bg)}
+.action-strip{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr);gap:28px;align-items:center;padding:20px 26px;border-left:5px solid var(--ink)}.action-strip h2{font-size:28px}.action-strip p{margin:0;color:var(--muted)}
+.archive-notice{border-left-color:var(--amber)}
+.secondary-section{padding:0}.secondary-section>summary{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:19px 24px;cursor:pointer;list-style:none}.secondary-section>summary::-webkit-details-marker{display:none}.secondary-section>summary::after{content:'+';font:28px/1 Georgia,serif}.secondary-section[open]>summary::after{content:'−'}.secondary-section summary strong{display:block;font:700 22px/1.15 Georgia,serif;margin-top:4px}.summary-hint{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.details-body{padding:0 24px 26px;border-top:1px solid var(--line)}
+.stale-callout{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:baseline;margin:22px 0;padding:15px 18px;background:var(--info-bg)}.stale-callout.is-stale{background:var(--warn-bg);border-left:3px solid var(--amber)}.stale-callout p{width:100%;margin:0;color:var(--muted)}.quiet-copy,.section-intro{color:var(--muted)}
+.research-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.research-card{padding:19px;border:1px solid var(--line);background:var(--card)}.research-card header{display:flex;justify-content:space-between;gap:12px;align-items:start}.research-card h3{margin:3px 0;font:700 27px/1 Georgia,serif}.research-card>p{min-height:3em;color:var(--muted);overflow-wrap:anywhere}.research-card .funnel-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin:15px 0}.gate-copy{font-size:13px}.gate-copy p{margin:5px 0 0;color:var(--muted)}.gate-copy ul{padding-left:18px;margin:5px 0}
+.legacy-section{opacity:.86}.legacy-section[open]{opacity:1}
+.base-paper{padding:clamp(16px,3vw,24px)}.base-paper .research-card-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,26rem),1fr))}.base-paper .chain-facts{display:grid;grid-template-columns:1fr;gap:12px}.base-paper .chain-facts>div{min-width:0}.base-paper dd{overflow-wrap:anywhere}.base-paper .research-card>p{min-height:0}
+.base-paper table{min-width:360px}.base-paper th{white-space:normal}
+@media (max-width:700px){.mast,main,footer{padding-left:16px;padding-right:16px}.mast{gap:12px;flex-wrap:wrap}.mast-actions{gap:9px;flex-direction:row;flex-wrap:wrap;align-items:center;width:100%}.mast nav{display:flex;flex-basis:100%;justify-content:flex-start;gap:10px 16px}.watch-headline,.action-strip{grid-template-columns:1fr;gap:16px}.research-card-grid{grid-template-columns:1fr}.secondary-section>summary{padding:17px}.details-body{padding:0 17px 20px}.summary-hint{display:none}.watch-headline h3{font-size:32px}.evidence-grid{grid-template-columns:1fr}.hero{padding-top:42px}}
+
+/* Ventaja real / Hunt thesis: what this workspace hunts, and why it wins. */
+.thesis{margin:30px 0;border:1px solid var(--ink);border-top:6px solid var(--lime);background:var(--card);padding:clamp(18px,3vw,30px);box-shadow:8px 8px 0 var(--shadow)}
+.thesis-head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:18px}
+.thesis-head h2{font:700 clamp(24px,3.4vw,38px)/1.02 Georgia,serif;letter-spacing:-.03em;margin:6px 0 0}
+.thesis-lede{color:var(--muted);max-width:640px;margin:8px 0 0;font-size:12px}
+.thesis-counters{display:flex;gap:8px;flex-wrap:wrap}
+.thesis-counters .counter{border:1px solid var(--line);border-top:4px solid var(--blue);background:var(--raised);padding:9px 12px;display:grid;gap:1px;min-width:78px}
+.thesis-counters .counter.blocked{border-top-color:var(--red)}
+.thesis-counters .counter b{font:700 22px/1 Georgia,serif}
+.thesis-counters .counter span{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.thesis-body{display:grid;grid-template-columns:1.25fr .75fr;gap:20px}
+.thesis-block .eyebrow{margin-bottom:8px}
+.thesis-tags{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:7px}
+.thesis-tags li{border:1px solid var(--line);background:var(--surface-3);padding:6px 10px;font-size:11px;color:var(--ink)}
+.thesis-tags.method li{background:var(--info-bg);border-color:var(--blue)}
+.thesis-quote{margin:20px 0 0;padding:14px 18px;border-left:6px solid var(--lime);background:var(--neutral-bg);font:700 clamp(17px,2vw,23px)/1.15 Georgia,serif;letter-spacing:-.01em}
+@media (max-width:900px){.thesis-body{grid-template-columns:1fr}}
+@media (max-width:760px){.thesis-head{flex-direction:column}}

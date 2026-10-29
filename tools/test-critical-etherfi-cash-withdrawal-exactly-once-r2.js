@@ -1,0 +1,36 @@
+#!/usr/bin/env node
+"use strict";
+
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const ROOT = path.resolve(__dirname, "..");
+const NAME = "critical-etherfi-cash-withdrawal-exactly-once-r2";
+const RAW = `reports/raw/fast/${NAME}.json`;
+const MANIFEST = `reports/raw/fast/${NAME}-manifest.json`;
+const CLASSIFICATION = "INFORMATIONAL/REVIEWER-R2/CONDITIONAL-NONSTANDARD-ERC20-CONSUMPTION/SOLADY-ZERO-SENTINEL-RECIPIENT-REJECTED/NO-ATTACKER-CAPTURE/EXACT-SOURCE";
+const abs = (rel) => path.join(ROOT, rel);
+const sha = (data) => crypto.createHash("sha256").update(data).digest("hex");
+const check = (ok, message) => { if (!ok) throw new Error(message); };
+const hashFile = (rel) => { const data = fs.readFileSync(abs(rel)); return { path: rel, bytes: data.length, sha256: sha(data) }; };
+const raw = JSON.parse(fs.readFileSync(abs(RAW), "utf8"));
+const manifest = JSON.parse(fs.readFileSync(abs(MANIFEST), "utf8"));
+check(raw.classification === CLASSIFICATION, "classification drift");
+check(raw.predecessor.raw.sha256 && raw.predecessor.manifest.sha256 && raw.predecessor.predecessorManifestAggregateSha256, "predecessor binding missing");
+check(raw.source.commit === "e05bda2be27a6a606f3f1b8ff0d0791032fd0ff8" && raw.source.productionSourceDiffAgainstCommit.length === 0 && raw.source.offlineBuild.exitStatus === 0, "source/build binding failed");
+check(raw.tests.passCount === 30 && raw.tests.failCount === 0 && raw.tests.testCount === 30 && raw.tests.unitTestCount === 26, "test count drift");
+check(raw.tests.fuzzPropertyCount === 4 && raw.tests.totalFuzzCases >= 1024 && raw.tests.deterministicSemanticReplay, "fuzz/replay drift");
+check(raw.tests.tests.some((x) => x.name === "testNonzeroSoladyZeroSentinelRecipientRevertsAvailabilityOnly()"), "fixed sentinel regression absent");
+check(raw.tests.tests.some((x) => x.name === "testFuzzSoladyZeroSentinelRecipientAlwaysReverts(uint96)" && x.fuzzRuns >= 256), "sentinel property absent");
+check(raw.reviewerCorrections.generalRecipientFuzzExcludesZeroAndSentinel && raw.reviewerCorrections.separateFixedRegression && raw.reviewerCorrections.separateSentinelFuzzProperty, "review correction drift");
+check(raw.deltas.sentinel.recipientPayoutRaw === "0" && raw.deltas.sentinel.pendingRaw === "0" && raw.deltas.sentinel.nonceDelta === "0" && raw.deltas.sentinel.attackerGainRaw === "0", "sentinel delta drift");
+check(raw.invariantAssessment.standardTokenExactlyOncePassWithinCorrectedRecipientDomain && raw.invariantAssessment.sentinelAlwaysRevertsPropertyPass && !raw.invariantAssessment.sentinelAttackerCaptureFound, "invariant drift");
+check(!raw.invariantAssessment.strictPartialFulfillmentPass && !raw.invariantAssessment.permissionlessAttackerCaptureFound, "conditional primitive drift");
+check(raw.conclusion.branchPipeline === "1/5_SOURCE_SEMANTIC_PRIMITIVES_CONDITIONAL_NO_ATTACKER_VALUE" && raw.conclusion.extractionPipeline === "0/5_NO_ATTACKER_VALUE_PATH", "branch pipeline drift");
+check(raw.conclusion.globalHighestPipeline === "DebtManager donation 2/5 WATCH unchanged" && !raw.conclusion.advances && raw.conclusion.routePositive === 0 && raw.conclusion.executableNow === 0 && !raw.conclusion.signedActionJustified, "global gate drift");
+check(raw.safety.offlineOnly && !raw.safety.network && !raw.safety.rpcInventoryRead && !raw.safety.fork && !raw.safety.liveTransactions && !raw.safety.signedActions, "safety drift");
+check(!/https?:\/\//i.test(JSON.stringify(raw)) && !/https?:\/\//i.test(JSON.stringify(manifest)), "URL leak");
+const current = manifest.records.map((record) => { const row = hashFile(record.path); check(row.bytes === record.bytes && row.sha256 === record.sha256, `manifest drift: ${record.path}`); return row; });
+const aggregate = sha(current.map((row) => `${row.path}\0${row.bytes}\0${row.sha256}`).join("\n"));
+check(aggregate === manifest.aggregateSha256 && manifest.runId === raw.runId, "manifest aggregate/run drift");
+console.log(JSON.stringify({ ok: true, validations: 16, runId: raw.runId, classification: raw.classification, tests: raw.tests.passCount, unitTests: raw.tests.unitTestCount, fuzzProperties: raw.tests.fuzzPropertyCount, fuzzCases: raw.tests.totalFuzzCases, sentinelRegression: true, branchPipeline: raw.conclusion.branchPipeline, globalHighestPipeline: raw.conclusion.globalHighestPipeline, manifestAggregateSha256: aggregate }, null, 2));

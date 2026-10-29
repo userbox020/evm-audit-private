@@ -1,0 +1,47 @@
+project:
+  name: example-protocol
+  root: .
+  reports_dir: reports
+  tools_dir: .audit-tools
+  runner: local
+  compose_file: docker/docker-compose.audit.yml
+  default_fail_on: critical
+scope:
+  targets:
+    - src
+    - contracts
+  exclude:
+    - lib
+    - node_modules
+    - broadcast
+    - cache
+    - out
+profiles:
+  default: fast
+chains:
+  base:
+    name: Base Mainnet
+    chain_id: 8453
+    rpc_url_env: BASE_RPC_URL
+    explorer: BaseScan
+    explorer_url: https://basescan.org
+    explorer_api_url: https://api.basescan.org/api
+    explorer_api_key_env: BASESCAN_API_KEY
+  base_sepolia:
+    name: Base Sepolia
+    chain_id: 84532
+    rpc_url_env: BASE_SEPOLIA_RPC_URL
+    explorer: BaseScan Sepolia
+    explorer_url: https://sepolia.basescan.org
+    explorer_api_url: https://api-sepolia.basescan.org/api
+    explorer_api_key_env: BASESCAN_API_KEY
+targets:
+  example_base:
+    chain: base
+    address: "0x0000000000000000000000000000000000000000"
+    fork_block: ""
+  example_base_sepolia:
+    chain: base_sepolia
+    address: "0x0000000000000000000000000000000000000000"
+    fork_block: ""
+# YAML loading requires PyYAML: pip install -e .[yaml]

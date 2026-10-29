@@ -1,0 +1,51 @@
+#!/usr/bin/env node
+"use strict";
+
+// R8 wrapper-integrity correction. The complete inherited manifest/file closure
+// is verified before inventory access or transport. R7 semantics remain unchanged.
+
+const crypto = require("crypto"); const fs = require("fs"); const path = require("path");
+const r7 = require("./run-critical-etherfi-behype-hyperevm-behavioral-retry-r7.js"); const r5 = require("./run-critical-etherfi-behype-hyperevm-behavioral-retry-r5.js");
+const R7_AGGREGATE = "6724662ab611d10c93e65762d9915dd4bbf2bd7ac977df8cd8a521c145503858"; const R6_AGGREGATE = r7.R6_AGGREGATE; const R5_AGGREGATE = "be013a696f47fed186c88faf26026627ba4ae6269473cf771c3e92335e2f48d1";
+const R7_MANIFEST = "reports/raw/fast/critical-etherfi-behype-hyperevm-behavioral-retry-proposal-r7-manifest.json"; const R6_MANIFEST = "reports/raw/fast/critical-etherfi-behype-hyperevm-behavioral-retry-proposal-r6-manifest.json"; const R5_MANIFEST = "reports/raw/fast/critical-etherfi-behype-hyperevm-behavioral-retry-proposal-r5-manifest.json";
+const CONSUMED_SEMANTIC_PATHS = Object.freeze(Object.values(r5.ARTIFACTS).sort());
+const ALLOWED_TOP_LEVEL = new Set(["tools", "reports", "coordination", "targets", "contracts", "test", "tests", "script", "scripts", "lib", "src", ".opencode", "package.json", "package-lock.json", "foundry.toml", "hardhat.config.js", "hardhat.config.ts"]);
+const FORBIDDEN_PATH = /(?:^|\/)(?:\.env(?:\..*)?|rpc_endpoints\.txt|graphql_endpoints\.txt|.*(?:private[-_]?key|seed|mnemonic|keypair|\.pem|\.key))(?:$|\/)/i;
+const sha = (value) => crypto.createHash("sha256").update(value).digest("hex"); const hashFile = (file) => { const body = fs.readFileSync(file); return { bytes: body.length, sha256: sha(body) }; }; const aggregate = (records) => sha(Buffer.from(records.map((row) => `${row.path}\0${row.bytes}\0${row.sha256}`).join("\n")));
+const canonical = (value) => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value; const canonicalJson = (value) => JSON.stringify(canonical(value));
+function stop(code, detail = null) { const error = new r7.SemanticStop(code, "preflight"); if (detail) error.message = `${code}:${detail}`; throw error; }
+function safeWorkspacePath(root, rel) {
+  if (typeof rel !== "string" || !rel || rel.includes("\0") || rel.includes("\\") || path.isAbsolute(rel) || /^[a-z]:/i.test(rel)) stop("INTEGRITY_PATH_INVALID"); const parts = rel.split("/"); if (parts.some((part) => !part || part === "." || part === "..")) stop("INTEGRITY_PATH_ESCAPE"); if (!ALLOWED_TOP_LEVEL.has(parts[0]) || FORBIDDEN_PATH.test(rel)) stop("INTEGRITY_PATH_NOT_ALLOWLISTED");
+  const realRoot = fs.realpathSync(root); const resolved = path.resolve(realRoot, ...parts); if (resolved !== realRoot && !resolved.startsWith(`${realRoot}${path.sep}`)) stop("INTEGRITY_PATH_ESCAPE"); if (!fs.existsSync(resolved)) stop("INTEGRITY_FILE_MISSING"); const real = fs.realpathSync(resolved); if (real !== realRoot && !real.startsWith(`${realRoot}${path.sep}`)) stop("INTEGRITY_SYMLINK_ESCAPE"); return real;
+}
+function mergeRecordBinding(recordMap, row) { const prior = recordMap.get(row.path); if (prior && (prior.bytes !== row.bytes || prior.sha256 !== row.sha256)) stop("INTEGRITY_CONFLICTING_RECORD"); if (!prior) recordMap.set(row.path, row); }
+function assertAcyclicManifestGraph(graph, root) { const visited = new Set(); const active = new Set(); const walk = (node) => { if (active.has(node)) stop("INTEGRITY_MANIFEST_CYCLE"); if (visited.has(node)) return; active.add(node); for (const child of graph.get(node) || []) walk(child); active.delete(node); visited.add(node); }; walk(root); return true; }
+function verifyManifestClosure(root, rootManifestRelativePath) {
+  const manifests = new Map(); const records = new Map(); const stack = []; const graph = new Map();
+  const visit = (manifestRel) => {
+    const normalized = manifestRel.replace(/\\/g, "/"); if (stack.includes(normalized)) stop("INTEGRITY_MANIFEST_CYCLE"); if (manifests.has(normalized)) return; const manifestPath = safeWorkspacePath(root, normalized); let manifest; try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")); } catch { stop("INTEGRITY_MANIFEST_PARSE_FAILED"); }
+    if (!manifest || !Array.isArray(manifest.records) || !/^[0-9a-f]{64}$/.test(manifest.aggregateSha256 || "")) stop("INTEGRITY_MANIFEST_SCHEMA_INVALID"); stack.push(normalized); const local = new Set(); const actual = [];
+    for (const row of manifest.records) {
+      if (!row || typeof row.path !== "string" || !Number.isSafeInteger(row.bytes) || row.bytes < 0 || !/^[0-9a-f]{64}$/.test(row.sha256 || "")) stop("INTEGRITY_RECORD_SCHEMA_INVALID", normalized); if (local.has(row.path)) stop("INTEGRITY_DUPLICATE_RECORD", `${normalized}:${row.path}`); local.add(row.path); const file = safeWorkspacePath(root, row.path); const current = { path: row.path, ...hashFile(file) }; if (current.bytes !== row.bytes || current.sha256 !== row.sha256) stop("INTEGRITY_RECORD_HASH_MISMATCH", `${normalized}:${row.path}`); mergeRecordBinding(records, current); actual.push(current);
+    }
+    if (aggregate(actual) !== manifest.aggregateSha256) stop("INTEGRITY_AGGREGATE_MISMATCH"); manifests.set(normalized, { path: normalized, aggregateSha256: manifest.aggregateSha256, recordCount: actual.length, manifest });
+    let children = []; const predecessorPath = manifest.predecessorBinding?.manifest?.path; if (normalized !== R5_MANIFEST && predecessorPath) { if (!actual.some((row) => row.path === predecessorPath)) stop("INTEGRITY_PREDECESSOR_MANIFEST_UNBOUND", `${normalized}:${predecessorPath}`); children = [predecessorPath]; } graph.set(normalized, children); for (const child of children) visit(child); stack.pop();
+  };
+  visit(rootManifestRelativePath); assertAcyclicManifestGraph(graph, rootManifestRelativePath); const uniqueRecords = [...records.values()].sort((a, b) => a.path.localeCompare(b.path)); const manifestRows = [...manifests.values()].map(({ path: manifestPath, aggregateSha256, recordCount }) => ({ path: manifestPath, aggregateSha256, recordCount })).sort((a, b) => a.path.localeCompare(b.path));
+  return canonical({ rootManifestRelativePath, uniqueRecordCount: uniqueRecords.length, manifestCount: manifestRows.length, closureDigestSha256: aggregate(uniqueRecords), records: uniqueRecords, manifests: manifestRows });
+}
+function verifyPackage(options) {
+  const { workspaceRoot: root, manifestRelativePath, approvedDecision, clock, mode } = options; if (!approvedDecision || typeof approvedDecision.decisionTimestamp !== "string") stop("APPROVED_DECISION_TIMESTAMP_REQUIRED"); const at = Date.parse(approvedDecision.decisionTimestamp); if (!Number.isFinite(at) || clock.now() < at || clock.now() - at > r7.POLICY.startDeadlineMs) stop("APPROVAL_START_DEADLINE_EXCEEDED"); if (mode === "network" && approvedDecision.decision !== "APPROVED") stop("NETWORK_DECISION_NOT_APPROVED"); if (mode === "mock" && approvedDecision.decision !== "APPROVED_FOR_MOCK_FIXTURE_ONLY") stop("MOCK_DECISION_NOT_APPROVED");
+  const closure = verifyManifestClosure(root, manifestRelativePath); const rootRow = closure.manifests.find((row) => row.path === manifestRelativePath); const manifest = JSON.parse(fs.readFileSync(safeWorkspacePath(root, manifestRelativePath), "utf8")); if (!rootRow || manifest.runId !== approvedDecision.proposalRunId || manifest.aggregateSha256 !== approvedDecision.packageManifestAggregateSha256) stop("PACKAGE_APPROVAL_BINDING_MISMATCH"); if (manifest.proposalStatus !== "REVIEW_REQUESTED/NOT_AUTHORIZED/NOT_EXECUTED" || manifest.predecessorBinding?.manifestAggregateSha256 !== R7_AGGREGATE || manifest.predecessorBinding?.manifest?.path !== R7_MANIFEST) stop("R7_BINDING_MISMATCH");
+  const expectedChain = new Map([[R7_MANIFEST, R7_AGGREGATE], [R6_MANIFEST, R6_AGGREGATE], [R5_MANIFEST, R5_AGGREGATE]]); for (const [manifestPath, expected] of expectedChain) { const row = closure.manifests.find((item) => item.path === manifestPath); if (!row || row.aggregateSha256 !== expected) stop("INTEGRITY_PREDECESSOR_CHAIN_MISMATCH"); }
+  const recordMap = new Map(closure.records.map((row) => [row.path, row])); for (const semanticPath of CONSUMED_SEMANTIC_PATHS) if (!recordMap.has(semanticPath)) stop("INTEGRITY_CONSUMED_SEMANTIC_ARTIFACT_UNBOUND"); const self = recordMap.get(manifest.runner?.path); if (!self || self.bytes !== manifest.runner.bytes || self.sha256 !== manifest.runner.sha256 || hashFile(__filename).sha256 !== self.sha256) stop("RUNNER_SELF_HASH_MISMATCH");
+  const summary = canonical({ uniqueRecordCount: closure.uniqueRecordCount, manifestCount: closure.manifestCount, closureDigestSha256: closure.closureDigestSha256, consumedSemanticArtifactCount: CONSUMED_SEMANTIC_PATHS.length, consumedSemanticArtifacts: CONSUMED_SEMANTIC_PATHS.map((semanticPath) => recordMap.get(semanticPath)) }); if (canonicalJson(summary) !== canonicalJson(manifest.recursiveIntegrity)) stop("INTEGRITY_CLOSURE_SUMMARY_MISMATCH"); return { manifest, closure, summary };
+}
+class SemanticRetryRunner extends r7.SemanticRetryRunner {
+  async runInternal() {
+    const verified = verifyPackage({ ...this.options, clock: this.clock, mode: this.mode }); const original = this.options; const decision = { decision: this.mode === "network" ? "APPROVED" : "APPROVED_FOR_MOCK_FIXTURE_ONLY", decisionTimestamp: original.approvedDecision.decisionTimestamp, proposalRunId: verified.manifest.predecessorBinding.runId, packageManifestAggregateSha256: R7_AGGREGATE };
+    this.options = { ...original, manifestRelativePath: R7_MANIFEST, approvedDecision: decision }; try { const result = await super.runInternal(); result.recursiveIntegrity = verified.summary; return canonical(result); } finally { this.options = original; }
+  }
+}
+module.exports = { ...r7, SemanticRetryRunner, verifyPackage, verifyManifestClosure, safeWorkspacePath, mergeRecordBinding, assertAcyclicManifestGraph, CONSUMED_SEMANTIC_PATHS, R7_AGGREGATE, R7_MANIFEST, R6_MANIFEST, R5_MANIFEST };
+if (require.main === module) process.stdout.write(JSON.stringify({ status: "REVIEW_ONLY_R8_RECURSIVE_INTEGRITY_RUNNER_READY", networkInvoked: false, inventoryRead: false, endpointCalls: 0, approvedDecisionRequired: true }) + "\n");

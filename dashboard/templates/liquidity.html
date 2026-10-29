@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% set view = data|default({}, true) %}
+{% set counts = view.summary|default({}, true) %}
+{% set filters = view.filters|default({}, true) %}
+{% set options = view.options|default({}, true) %}
+{% set scan = view.scan|default({}, true) %}
+{% set routes = view.routes|default([], true) %}
+{% set states = [
+  ('implemented', 'Implemented', 'Code present · not readiness'),
+  ('quote_only', 'Quote only', 'Quotes, not execution'),
+  ('discovery_only', 'Discovery only', 'Candidates to investigate'),
+  ('study_only', 'Study only', 'Research, not execution'),
+  ('blocked', 'Blocked', 'A known blocker remains'),
+  ('unsupported', 'Unsupported', 'Not supported here')
+] %}
+{% block title %}Liquidity Paths · Watchboard{% endblock %}
+{% block body_class %}liquidity-shell{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='liquidity.css') }}">
+<script src="{{ url_for('static', filename='liquidity.js') }}" defer></script>
+{% endblock %}
+
+{% macro value(item, fallback='Not recorded') -%}
+  {{ item if item is defined and item is not none and item != '' else fallback }}
+{%- endmacro %}
+
+{% block content %}
+<div class="liquidity-page" data-liquidity-page>
+  <header class="l-hero">
+    <div>
+      <p class="l-eyebrow">FUNDING / SWAPS / REDEMPTIONS · READ ONLY</p>
+      <h1>Liquidity Paths<span aria-hidden="true">.</span></h1>
+      <p class="l-lede">How value moves, and what still needs proof. Explore funding, exits, costs, and the evidence behind each path.</p>
+      <a class="l-jump" href="#liquidity-register">Browse {{ value(counts.total, 'all') }} catalog entries <span aria-hidden="true">↓</span></a>
+    </div>
+    <div class="l-snapshot" aria-label="Catalog review date">
+      <span class="l-eyebrow">CURATED SNAPSHOT</span>
+      <time datetime="{{ view.catalog_as_of or '' }}">{{ value(view.catalog_as_of) }}</time>
+      <span>No live check performed by this page</span>
+      <p>Page reloads do not recheck routes or change the catalog review or retained scan dates.</p>
+    </div>
+  </header>
+
+  <aside class="l-boundary" aria-label="Readiness limits">
+    <strong>Implementation is not availability.</strong>
+    <span>Code, quotes, and past rehearsals do not establish current capacity, execution readiness, or profit. This page has no execution controls.</span>
+  </aside>
+
+  <section class="l-overview" aria-labelledby="liquidity-overview-title">
+    <div class="l-section-head">
+      <h2 id="liquidity-overview-title">Catalog at a glance</h2>
+      <p class="l-meta">Global counts · unaffected by filters</p>
+    </div>
+    <div class="l-counts">
+      <dl class="l-totals">
+        <div><dt>Catalog entries</dt><dd>{{ value(counts.total, 'Unknown') }}</dd><dd class="l-count-caption">All recorded paths</dd></div>
+        <div><dt>Atomic funding</dt><dd>{{ value(counts.atomic_funding, 'Unknown') }}</dd><dd class="l-count-caption">Families · not available balances</dd></div>
+      </dl>
+      <ul class="l-status-counts" aria-label="Global counts by catalog status">
+        {% for key, label, meaning in states %}
+        <li><a href="{{ url_for('liquidity_page', status=key, _anchor='liquidity-register') }}" class="l-count-link l-state-{{ key }}" aria-label="Show all {{ label|lower }} entries: {{ value(counts[key], 'count unknown') }}">
+          <span class="l-count-label">{{ label }} <span aria-hidden="true">↗</span></span><strong>{{ value(counts[key], '?') }}</strong><span class="l-count-meaning">{{ meaning }}</span>
+        </a></li>
+        {% endfor %}
+      </ul>
+    </div>
+    <p class="l-help">Select a status count to browse that group across all chains and categories. A path can be implemented and still have blockers.</p>
+  </section>
+
+  <div class="l-context">
+    <details class="l-context-panel" id="liquidity-scan">
+      <summary><span><span class="l-eyebrow">RETAINED SCAN · {{ value(scan.as_of) }}</span><strong>Scan scope &amp; counts</strong><span class="l-meta">Limited coverage, not a full market scan</span></span><span class="l-chevron" aria-hidden="true">+</span></summary>
+      <div class="l-context-body">
+        <p>{{ value(scan.scope, 'Scan scope not recorded.') }}</p>
+        <div class="l-scan-chains">
+          {% for chain in scan.chains|default([], true) %}
+          <section class="l-scan-chain" aria-label="{{ chain.name }} scan counts">
+            <h3>{{ chain.name }}</h3>
+            <dl><div><dt>Token-pair entries</dt><dd>{{ value(chain.token_pair_entries, '?') }}</dd></div><div><dt>Qualified route families</dt><dd>{{ value(chain.qualified_route_families, '?') }}</dd></div><div><dt>Selected pools</dt><dd>{{ value(chain.selected_pools, '?') }}</dd></div></dl>
+          </section>
+          {% else %}<p class="l-meta">No scan counts recorded. Missing counts are not zero.</p>{% endfor %}
+        </div>
+        <p class="l-scan-conclusion"><strong>Recorded conclusion</strong>{{ value(scan.conclusion, 'No scan conclusion recorded; current profitability is not established.') }}</p>
+      </div>
+    </details>
+    <details class="l-context-panel" id="liquidity-caveats">
+      <summary><span><span class="l-eyebrow">EVIDENCE &amp; ECONOMICS</span><strong>How to read these paths</strong><span class="l-meta">Conditions, cost rules, and historical limits</span></span><span class="l-chevron" aria-hidden="true">+</span></summary>
+      <div class="l-context-body">
+        <p>Conservative net must be greater than zero after all costs and uncertainty. The 100 USDC floor applies only to the competitive pilot, not every path.</p>
+        <ul class="l-notes">{% for notice in view.notices|default([], true) %}<li>{{ notice }}</li>{% else %}<li>Additional caveats are not recorded. Check each path’s evidence, blockers, and next check.</li>{% endfor %}</ul>
+      </div>
+    </details>
+  </div>
+
+  <section class="l-register" id="liquidity-register" aria-labelledby="liquidity-register-title">
+    <div class="l-section-head">
+      <div><p class="l-eyebrow">PATH REGISTER</p><h2 id="liquidity-register-title">Find a path</h2></div>
+      <a class="l-json" href="{{ url_for('liquidity_api', q=filters.q or '', chain=filters.chain or '', category=filters.category or '', status=filters.status or '') }}">Filtered JSON <span aria-hidden="true">↗</span></a>
+    </div>
+    <form class="l-filters" action="{{ url_for('liquidity_page') }}#liquidity-register" method="get" aria-label="Filter liquidity paths" aria-describedby="liquidity-filter-help">
+      <label class="l-search" for="liquidity-search">Search inventory<input id="liquidity-search" type="search" name="q" value="{{ filters.q or '' }}" placeholder="Protocol, token, path, or evidence…" autocomplete="off" aria-controls="liquidity-list"></label>
+      {% for name, label, all_label, collection in [('chain', 'Chain', 'All chains', options.chains), ('category', 'Category', 'All categories', options.categories), ('status', 'Catalog status', 'All statuses', options.statuses)] %}
+      <label for="liquidity-{{ name }}">{{ label }}<select id="liquidity-{{ name }}" name="{{ name }}" aria-controls="liquidity-list"><option value="">{{ all_label }}</option>{% for option in collection|default([], true) %}<option value="{{ option.value }}"{% if filters[name]|string == option.value|string %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
+      {% endfor %}
+      <div class="l-filter-actions"><button type="submit">Apply filters</button><a href="{{ url_for('liquidity_page', _anchor='liquidity-register') }}">Clear</a></div>
+    </form>
+    <p class="l-help" id="liquidity-filter-help">Search and filters apply to the full catalog on the server. Pause refresh in the header while editing if needed.</p>
+    <div class="l-results-bar">
+      <p class="l-result-count" role="status"><strong>{{ value(counts.matched, 'Unknown') }}</strong> matching / {{ value(counts.total, 'unknown') }} catalog entries</p>
+      <div class="l-detail-actions" data-liquidity-detail-actions hidden><button type="button" data-liquidity-expand aria-controls="liquidity-list">Expand shown</button><button type="button" data-liquidity-collapse aria-controls="liquidity-list">Collapse shown</button></div>
+    </div>
+    <noscript><p class="l-help">Filters and expandable path details work without JavaScript.</p></noscript>
+    {% if routes %}
+    <div class="l-list-heading" aria-hidden="true"><span>Path / category</span><span>Chains</span><span>Catalog status</span><span>Evidence / limits</span><span></span></div>
+    {% endif %}
+    <ul class="l-list" id="liquidity-list">
+      {% for route in routes %}
+      {% set state = route.status if route.status in ['implemented', 'quote_only', 'discovery_only', 'study_only', 'blocked', 'unsupported'] else 'unknown' %}
+      {% set route_anchor = 'liquidity-route-' ~ route.id %}
+      <li>
+        <details class="l-route" id="{{ route_anchor }}" data-liquidity-route>
+          <summary>
+            <span class="l-identity"><span class="l-category">{{ value(route.category_label) }}</span><strong>{{ value(route.name, 'Unnamed path') }}</strong></span>
+            <span class="l-chain-list"><span class="l-mobile-label">Chains</span>{% for chain in route.chains %}<span class="l-chain">{{ chain.name }}</span>{% else %}<span class="l-meta">Not recorded</span>{% endfor %}</span>
+            <span class="l-status-cell"><span class="l-mobile-label">Catalog status</span><span class="l-status l-state-{{ state }}">{{ value(route.status_label, 'Unknown') }}</span>{% if state == 'implemented' %}<span class="l-meta">Code present, not readiness</span>{% endif %}</span>
+            <span class="l-evidence-cell"><span class="l-mobile-label">Evidence / limits</span><span>{{ route.source_refs|length }} source reference{{ '' if route.source_refs|length == 1 else 's' }}</span><span class="{{ 'l-limit-count' if route.blockers else 'l-meta' }}">{% if route.blockers %}{{ route.blockers|length }} blocker{{ '' if route.blockers|length == 1 else 's' }} / limit{{ '' if route.blockers|length == 1 else 's' }}{% else %}Readiness not established{% endif %}</span></span>
+            <span class="l-chevron" aria-hidden="true">+</span><span class="l-sr">Funding, costs, evidence, and next check</span>
+          </summary>
+          <div class="l-route-body">
+            <div class="l-route-meta"><span>Reviewed <time datetime="{{ route.reviewed_at or '' }}">{{ value(route.reviewed_at) }}</time> · curated record, not a live check</span><a href="#{{ route_anchor|urlencode }}">Link to this path <span aria-hidden="true">#</span></a></div>
+            <div class="l-detail-grid">
+              <section>
+                <h3>Funding &amp; settlement</h3>
+                <dl class="l-facts">
+                  <div><dt>Funding</dt><dd>{{ value(route.funding) }}</dd></div>
+                  <div><dt>Atomicity / timing</dt><dd>{{ value(route.atomicity) }}</dd></div>
+                  <div><dt>Fees &amp; costs</dt><dd>{{ value(route.fees) }}</dd></div>
+                  <div><dt>Repayment</dt><dd>{{ value(route.repayment) }}</dd></div>
+                  <div><dt>Capacity</dt><dd>{{ value(route.capacity) }}</dd></div>
+                </dl>
+              </section>
+              <section>
+                <h3>Evidence &amp; execution limits</h3>
+                <dl class="l-facts"><div><dt>Recorded evidence</dt><dd>{{ value(route.evidence) }}</dd></div><div><dt>Execution scope</dt><dd>{{ value(route.execution) }}</dd></div></dl>
+                <div class="l-blockers"><h4>Blockers &amp; caveats</h4>{% if route.blockers %}<ul class="l-notes">{% for blocker in route.blockers %}<li>{{ blocker }}</li>{% endfor %}</ul>{% else %}<p>No specific blocker recorded. This is not proof of current readiness.</p>{% endif %}</div>
+                <div class="l-next"><h4>Next check</h4><p>{{ value(route.next_check) }}</p></div>
+              </section>
+              <section class="l-paths"><h3>Recorded paths</h3><ul class="l-path-list">{% for path in route.paths %}<li>{{ path }}</li>{% else %}<li>Path variants not recorded.</li>{% endfor %}</ul></section>
+              <section class="l-sources"><h3>Source references</h3><p class="l-meta">Local code and evidence locations · plain references, not file links</p>
+                <ul class="l-source-list">{% for ref in route.source_refs %}<li><code>{{ ref.path }}{% if ref.lines %}:{{ ref.lines }}{% endif %}</code>{% if ref.note %}<span>{{ ref.note }}</span>{% endif %}</li>{% else %}<li>No source references recorded.</li>{% endfor %}</ul>
+              </section>
+            </div>
+          </div>
+        </details>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if not routes %}
+    <div class="l-empty">
+      <span class="l-eyebrow">PATH REGISTER</span>
+      <h3>{% if counts.total|default(0, true) > 0 %}No paths match these filters{% else %}No catalog entries recorded{% endif %}</h3>
+      <p>{% if counts.total|default(0, true) > 0 %}Try a broader search, choose another category, or <a href="{{ url_for('liquidity_page', _anchor='liquidity-register') }}">clear the filters</a>. Global counts above still cover the full catalog.{% else %}An empty inventory does not establish that no liquidity paths exist or that any path is ready.{% endif %}</p>
+    </div>
+    {% endif %}
+    <div class="l-page-note"><p><span data-refresh-status aria-live="polite">Page refresh follows the header setting.</span> Reloading only rereads this curated catalog; it does not run an RPC check.</p><a href="#liquidity-register">Back to filters ↑</a></div>
+  </section>
+</div>
+{% endblock %}

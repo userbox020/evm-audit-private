@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% set view = data %}
+{% set counts = view.summary %}
+{% set filters = view.filters %}
+{% set options = view.options %}
+{% block title %}Findings · Watchboard{% endblock %}
+{% block body_class %}findings-shell{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='findings.css') }}">{% endblock %}
+
+{% macro value(item, fallback='Not recorded') -%}
+  {{ item if item is defined and item is not none and item != '' else fallback }}
+{%- endmacro %}
+
+{% macro metric(item) -%}
+  {% if item is none %}<span class="f-missing"><span aria-hidden="true">—</span> <span>Not recorded</span></span>{% elif item is number %}{{ '{:,}'.format(item) }}{% else %}{{ value(item) }}{% endif %}
+{%- endmacro %}
+
+{% block content %}
+<div class="findings-page">
+  <header class="f-hero">
+    <div>
+      <p class="f-eyebrow">RESULTS / EVIDENCE / LIMITS · READ ONLY</p>
+      <h1>Findings<span aria-hidden="true">.</span></h1>
+      <p class="f-lede">A priority-ordered record of what was learned, what was closed, and what still needs proof.</p>
+      <a class="f-jump" href="#findings-register">Browse {{ counts.total }} catalog entries <span aria-hidden="true">↓</span></a>
+    </div>
+    <div class="f-snapshot" aria-label="Catalog date">
+      <span class="f-eyebrow">CURATED SNAPSHOT</span>
+      <time datetime="{{ view.catalog_as_of }}">{{ view.catalog_as_of }}</time>
+      <span>No live check performed by this page</span>
+      <p>Reloading rereads this catalog. It does not verify process health, authority, or current economics.</p>
+    </div>
+  </header>
+
+  <aside class="f-boundary" aria-label="Evidence and readiness limits">
+    <strong>Most entries are negative results or closed defects.</strong>
+    <p>Code, quotes, and rehearsals do not establish readiness or profit. ARMED means authorised and firing nothing; it is a recorded status, not a live check. This page has no execution controls.</p>
+  </aside>
+
+  <section class="f-overview" aria-labelledby="findings-overview-title">
+    <div class="f-section-head">
+      <h2 id="findings-overview-title">Catalog at a glance <span class="f-total">{{ counts.total }} entries</span></h2>
+      <p class="f-meta">Global counts · unaffected by filters</p>
+    </div>
+    <h3 class="f-count-heading" id="findings-priority-title">By priority <span>Reading order · not a profit score</span></h3>
+    <ul class="f-counts f-priority-counts" aria-labelledby="findings-priority-title">
+      {% for option in options.priorities %}
+      <li><a class="f-count-link" href="{{ url_for('findings_page', priority=option.value, _anchor='findings-register') }}">
+        <span class="f-priority f-priority-{{ option.value }}">{{ option.label }}</span><strong>{{ counts.by_priority[option.label] }}</strong>
+        <span class="f-count-meaning">{{ view.priority_legend[option.label] }}</span>
+      </a></li>
+      {% endfor %}
+    </ul>
+    <h3 class="f-count-heading" id="findings-status-title">By status <span>Recorded outcomes · not current readiness</span></h3>
+    <ul class="f-counts f-status-counts" aria-labelledby="findings-status-title">
+      {% for option in options.statuses %}
+      <li><a class="f-count-link f-state-{{ option.value }}" href="{{ url_for('findings_page', status=option.value, _anchor='findings-register') }}">
+        <span class="f-count-label">{{ option.label }} <span aria-hidden="true">↗</span></span><strong>{{ counts.by_status[option.value] }}</strong>
+        <span class="f-count-meaning">{{ view.status_legend[option.value] }}</span>
+      </a></li>
+      {% endfor %}
+    </ul>
+    <p class="f-help">Select a count to browse that group across the full catalog. Legend meanings above are recorded catalog definitions, not new checks.</p>
+    <ul class="f-notices" aria-label="Catalog scope and caveats">{% for notice in view.notices %}<li>{{ notice }}</li>{% endfor %}</ul>
+  </section>
+
+  <section class="f-register" id="findings-register" aria-labelledby="findings-register-title">
+    <div class="f-section-head">
+      <div><p class="f-eyebrow">FINDINGS REGISTER</p><h2 id="findings-register-title">Read the evidence</h2></div>
+      <a class="f-json" href="{{ url_for('findings_api', q=filters.q, priority=filters.priority, status=filters.status) }}">Filtered JSON <span aria-hidden="true">↗</span></a>
+    </div>
+    <form class="f-filters" action="{{ url_for('findings_page') }}#findings-register" method="get" aria-label="Filter findings" aria-describedby="findings-filter-help">
+      <label class="f-search" for="findings-search">Search register<input id="findings-search" type="search" name="q" value="{{ filters.q }}" placeholder="Title, metric, category, or evidence…" autocomplete="off" aria-controls="findings-list"></label>
+      {% for name, label, all_label, collection in [('priority', 'Priority', 'All priorities', options.priorities), ('status', 'Recorded status', 'All statuses', options.statuses)] %}
+      <label for="findings-{{ name }}">{{ label }}<select id="findings-{{ name }}" name="{{ name }}" aria-controls="findings-list"><option value="">{{ all_label }}</option>{% for option in collection %}<option value="{{ option.value }}"{% if filters[name] == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
+      {% endfor %}
+      <div class="f-filter-actions"><button type="submit">Apply filters</button><a href="{{ url_for('findings_page', _anchor='findings-register') }}">Clear</a></div>
+    </form>
+    <p class="f-help" id="findings-filter-help">Filters search the full catalog on the server. Filters and expandable details work without JavaScript. Pause refresh in the header while reading if needed.</p>
+    <div class="f-results-bar">
+      <p class="f-result-count" role="status"><strong>{{ counts.matched }}</strong> matching / {{ counts.total }} catalog entries</p>
+      <p class="f-meta">P0 → P5 · largest absolute USD metric next · ID breaks ties</p>
+    </div>
+    <p class="f-help f-sort-note">Size uses netUsd, cleanDebtUsd, or fields ending in BonusUsd / DebtUsd. It is not a profit ranking; missing sizes sort after measured zero.</p>
+    {% if view.findings %}<div class="f-list-heading" aria-hidden="true"><span>Priority</span><span>Finding / category</span><span>Recorded status</span><span></span></div>{% endif %}
+    <ol class="f-list" id="findings-list">
+      {% for finding in view.findings %}
+      <li>
+        <details class="f-finding" id="finding-{{ finding.id }}">
+          <summary>
+            <span class="f-priority f-priority-{{ finding.priority }}" aria-label="Priority {{ finding.priority_label }}">{{ finding.severity }}</span>
+            <span class="f-identity"><span class="f-category">{{ finding.id }} · {{ finding.category_label }}</span><strong>{{ finding.title }}</strong></span>
+            <span class="f-status-cell"><span class="f-status f-state-{{ finding.status }}">{{ finding.status_label }}</span>{% if finding.status == 'ARMED' %}<span class="f-meta">Authorised · snapshot only</span>{% endif %}</span>
+            <span class="f-chevron" aria-hidden="true">+</span><span class="f-sr">Summary, measurements, action, and evidence</span>
+          </summary>
+          <div class="f-finding-body">
+            <div class="f-record-meta"><span>{{ finding.id }} · lane: {{ finding.lane }} · catalog {{ view.catalog_as_of }}</span><a href="#finding-{{ finding.id|urlencode }}">Link to this finding <span aria-hidden="true">#</span></a></div>
+            <p class="f-summary">{{ finding.summary }}</p>
+            <div class="f-detail-grid">
+              <section>
+                <h3>Recorded measurements</h3>
+                {% if finding.measured %}
+                <dl class="f-metrics">{% for name, item in finding.measured.items() %}<div><dt><code>{{ name }}</code></dt><dd>{{ metric(item) }}</dd></div>{% endfor %}</dl>
+                {% else %}<p class="f-meta">No measured metrics recorded. Missing values are not zero.</p>{% endif %}
+                <p class="f-help">— Not recorded means unknown, never zero. Numeric values retain their sign and precision; sizes and bonuses are not realised profit.</p>
+              </section>
+              <section class="f-action">
+                <h3>Recorded action</h3>
+                <p>{{ finding.action }}</p>
+                <p class="f-meta">Catalog text only. No action is performed by this page.</p>
+              </section>
+              <section class="f-evidence">
+                <h3>Evidence references</h3>
+                <p class="f-meta">Repository paths · plain text, not file links · not opened or verified by this page</p>
+                <ul class="f-source-list">{% for path in finding.evidence %}<li><code>{{ path }}</code></li>{% else %}<li>No evidence paths recorded; this does not establish an absence of analysis.</li>{% endfor %}</ul>
+              </section>
+            </div>
+            <p class="f-record-limit">Catalog record only · no live readiness or profit established by this page.</p>
+          </div>
+        </details>
+      </li>
+      {% endfor %}
+    </ol>
+    {% if not view.findings %}
+    <div class="f-empty"><span class="f-eyebrow">FINDINGS REGISTER</span><h3>No entries shown for this view</h3><p>Try a broader search or <a href="{{ url_for('findings_page', _anchor='findings-register') }}">clear the filters</a>. Global counts still cover the full catalog. An empty view does not mean there are no findings or no analysis.</p></div>
+    {% endif %}
+    <div class="f-page-note"><p><span data-refresh-status aria-live="polite">Page refresh follows the header setting.</span> Reloading only rereads this snapshot; it does not run a live check.</p><a href="#findings-register">Back to filters ↑</a></div>
+  </section>
+</div>
+{% endblock %}

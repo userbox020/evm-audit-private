@@ -1,0 +1,83 @@
+#!/usr/bin/env node
+"use strict";
+
+const fs = require("node:fs");
+const fsp = require("node:fs/promises");
+const path = require("node:path");
+const { performance } = require("node:perf_hooks");
+const common = require("./polygon-robin-runtime-r2-common");
+const review = require("./polygon-robin-runtime-r2-review");
+const lifecycleAuthority = require("./polygon-robin-runtime-r2-lifecycle");
+
+const AUTH_PREFIX = "R2AUTH ", GO = Buffer.from("GO\n"), ACK = Buffer.from("R2ACK\n");
+const CAPS = Object.freeze({ fileBytes: 1048576, aggregateBytes: 4194304, chunkBytes: 65536, operationsPerFile: 17, aggregateOperations: 68, deadlineMs: 30000 });
+const CODES = Object.freeze({ ARGUMENT: "BROKER_ARGUMENT_REJECTED", MESSAGE: "BROKER_MESSAGE_REJECTED", FILE: "BROKER_FILE_REJECTED", DEADLINE: "BROKER_DEADLINE", PIPE: "BROKER_PIPE_FAILURE" });
+const FILE_OPERATIONS = Object.freeze({ lstat: (file) => fsp.lstat(file, { bigint: true }), realpath: fsp.realpath, open: async (...args) => { const handle = await fsp.open(...args); return { stat: () => handle.stat({ bigint: true }), read: (...x) => handle.read(...x), close: () => handle.close() }; } });
+function identity(stat) {
+  const numeric = (value, nonzero = false) => { if (typeof value === "bigint") { if (value < 0n || nonzero && value === 0n) common.fail("BROKER_IDENTITY_UNPROVEN"); return value.toString(); } if (!Number.isSafeInteger(value) || value < 0 || nonzero && value === 0) common.fail("BROKER_IDENTITY_UNPROVEN"); return String(value); },
+    dev = numeric(stat?.dev, true), ino = numeric(stat?.ino, true), nlink = Number(stat?.nlink), mode = Number(stat?.mode), size = Number(stat?.size), mtimeMs = Number(stat?.mtimeMs), ctimeMs = Number(stat?.ctimeMs), birth = Number(stat?.birthtimeMs), birthtimeMs = Number.isFinite(birth) ? birth : null;
+  if (!stat?.isFile?.() || stat.isSymbolicLink?.() || !Number.isSafeInteger(mode) || !Number.isSafeInteger(size) || size < 0 || nlink !== 1 || !Number.isFinite(mtimeMs) || !Number.isFinite(ctimeMs)) common.fail("BROKER_IDENTITY_UNPROVEN");
+  return { dev, ino, nlink, mode, size, mtimeMs, ctimeMs, birthtimeMs };
+}
+function sameIdentity(a, b) { return common.canonical(a) === common.canonical(b); }
+function frame(index, payload = Buffer.alloc(0)) { const bytes = Buffer.from(payload), header = Buffer.alloc(5); header.writeUInt8(index, 0); header.writeUInt32BE(bytes.length, 1); return Buffer.concat([header, bytes]); }
+function parseFrames(buffer, options = {}) {
+  const cap = options.aggregateBytes || CAPS.aggregateBytes, data = Buffer.from(buffer), rows = []; let offset = 0, total = 0, eof = false;
+  while (offset < data.length) { if (data.length - offset < 5) common.fail("BROKER_FRAMING_CAP_DEADLINE_EXIT_SECRECY"); const index = data.readUInt8(offset), length = data.readUInt32BE(offset + 1); offset += 5;
+    if (length > CAPS.fileBytes || total + length > cap || offset + length > data.length) common.fail("BROKER_FRAMING_CAP_DEADLINE_EXIT_SECRECY"); const payload = data.subarray(offset, offset + length); offset += length; total += length;
+    if (index === 255) { if (length || rows.length !== 4 || offset !== data.length) common.fail("BROKER_FRAMING_CAP_DEADLINE_EXIT_SECRECY"); eof = true; break; }
+    if (index !== rows.length || index > 3) common.fail("BROKER_FRAMING_CAP_DEADLINE_EXIT_SECRECY"); rows.push(Buffer.from(payload)); }
+  if (!eof) common.fail("BROKER_FRAMING_CAP_DEADLINE_EXIT_SECRECY"); return rows;
+}
+async function readFiles(options = {}) {
+  const operations = options.operations || FILE_OPERATIONS, paths = options.paths || common.INVENTORY_PATHS, limits = options.synthetic && options.caps ? { ...CAPS, ...options.caps } : CAPS;
+  if (options.paths && options.synthetic !== true || paths.length !== 4 || !options.paths && common.canonical(paths) !== common.canonical(common.INVENTORY_PATHS)) common.fail("BROKER_IDENTITY_UNPROVEN");
+  const now = options.now || (() => performance.now()), started = now(), output = []; let aggregate = 0, aggregateOps = 0;
+  const deadline = () => { if (options.parentAlive && !options.parentAlive() || now() - started >= limits.deadlineMs) common.fail("BROKER_DEADLINE"); };
+  const bounded = async (factory) => { deadline(); const remaining = Math.max(1, limits.deadlineMs - (now() - started)); let timer; try { return await Promise.race([Promise.resolve().then(factory), new Promise((_, reject) => { timer = setTimeout(() => reject(new common.R2Error("BROKER_DEADLINE")), remaining); timer.unref?.(); })]); } finally { clearTimeout(timer); deadline(); } };
+  for (let index = 0; index < paths.length; index += 1) {
+    const file = paths[index]; if (!path.isAbsolute(file) || !options.synthetic && file !== common.INVENTORY_PATHS[index]) common.fail("BROKER_IDENTITY_UNPROVEN"); deadline();
+    const before = identity(await bounded(() => operations.lstat(file))); const real = await bounded(() => operations.realpath(file)); if (path.resolve(real) !== path.resolve(file) || before.size > limits.fileBytes || aggregate + before.size > limits.aggregateBytes) common.fail("BROKER_IDENTITY_UNPROVEN");
+    const noFollow = options.noFollowFlag ?? fs.constants.O_NOFOLLOW; if (typeof noFollow !== "number" || noFollow === 0) common.fail("BROKER_IDENTITY_UNPROVEN"); const handle = await bounded(() => operations.open(file, fs.constants.O_RDONLY | noFollow)); let closed = false;
+    try { const opened = identity(await bounded(() => handle.stat())); if (!sameIdentity(before, opened)) common.fail("BROKER_IDENTITY_UNPROVEN"); const chunks = []; let position = 0, operationsForFile = 0;
+      while (true) { deadline(); if (++operationsForFile > limits.operationsPerFile || ++aggregateOps > limits.aggregateOperations) common.fail("BROKER_IDENTITY_UNPROVEN"); const chunk = Buffer.alloc(limits.chunkBytes), row = await bounded(() => handle.read(chunk, 0, chunk.length, position));
+        if (!row || !Number.isInteger(row.bytesRead) || row.bytesRead < 0 || row.bytesRead > chunk.length) common.fail("BROKER_IDENTITY_UNPROVEN"); if (!row.bytesRead) break; position += row.bytesRead; if (position > before.size) common.fail("BROKER_IDENTITY_UNPROVEN"); chunks.push(chunk.subarray(0, row.bytesRead)); }
+      if (position !== before.size) common.fail("BROKER_IDENTITY_UNPROVEN"); await bounded(() => handle.close()); closed = true; const after = identity(await bounded(() => operations.lstat(file))), afterReal = await bounded(() => operations.realpath(file));
+      if (path.resolve(afterReal) !== path.resolve(file) || !sameIdentity(before, after)) common.fail("BROKER_IDENTITY_UNPROVEN"); aggregate += position; output.push(Buffer.concat(chunks, position));
+    } finally { if (!closed) await bounded(() => handle.close()).catch(() => {}); }
+  }
+  return output;
+}
+function configureProcess() {
+  if (process.report) { process.report.reportOnSignal = false; process.report.reportOnFatalError = false; process.report.reportOnUncaughtException = false; }
+  process.on("SIGUSR1", () => process.exit(70)); process.on("disconnect", () => process.exit(71)); process.stdout.on("error", () => process.exit(72));
+}
+async function authorize(root, nonce, options = {}) {
+  const operations = options.operations || fsp, lifecycle = path.join(root, "lifecycle"), capabilityPath = path.join(lifecycle, "broker-open.capability.json"), claimPath = path.join(lifecycle, "broker-open.consumed.claim"), ledgerPath = path.join(lifecycle, "consumption-ledger.json"), historyPath = path.join(lifecycle,"ledger-history"), sidecarPaths = ["review-a.consumed.json", "review-b.consumed.json"].map((name) => path.join(lifecycle, name)), user = options.user || (options.synthetic ? null : common.verifiedUser(options));
+  if (!options.synthetic && (path.resolve(root) !== path.resolve(user.root) || fs.realpathSync(root) !== root)) common.fail("BROKER_AUTHORIZATION"); const mount = options.synthetic ? null : (options.assertRuntimeMount || common.assertRuntimeMount)(root,lifecycle,process.execPath,user.uid,{home:user.home,launcherPath:path.join(root,common.NATIVE_LAUNCHER_RELATIVE)}), fixed = options.fixed || (options.synthetic ? null : await review.fixedAuthority(root, { uid: user.uid })), uid = options.uid ?? user?.uid;
+  const bundle=options.bundleAuthority||globalThis.__ROBIN_R2_BUNDLE_AUTHORITY;if(!bundle||bundle.fd!==3||bundle.seals!==15||!/^[0-9a-f]{64}$/.test(bundle.sha256))common.fail("BROKER_AUTHORIZATION"); if (path.resolve(root) !== path.resolve(options.expectedRoot || fixed?.capabilitySeal?.nativeRoot || root) || mount && common.canonical({uid:user.uid,gid:user.gid,mode:"0700",mountId:mount.mountId,stDev:mount.stDev,filesystem:mount.filesystem,statfsMagic:mount.statfsMagic}) !== common.canonical(fixed.capabilitySeal.rootAuthority)) common.fail("BROKER_AUTHORIZATION");
+  const read = async (file) => common.secureRead(file, { operations, uid, cap: common.CAPS.outputLifecycleBytes, mode: options.mode === undefined ? 0o600 : options.mode, noFollow: options.noFollowFlag, allowNoFollowUnavailable: options.synthetic });
+  const capabilityRead = await read(capabilityPath), capability = common.parseCanonicalJson(capabilityRead.bytes), ppid = options.ppid ?? process.ppid, parent = options.parentIdentity || common.processIdentity(ppid, options);
+  if (!common.exactKeys(capability, lifecycleAuthority.BROKER_CAPABILITY_KEYS) || capability.schemaVersion !== "robin-runtime-r2/broker-open-capability-v3" || capability.claimId !== common.STEM || capability.executionId !== common.EXECUTION_ID || capability.root !== root
+    || fixed && (capability.packageManifestSha256 !== fixed.authority.packageManifestSha256 || capability.packageAggregateSha256 !== fixed.authority.packageAggregateSha256 || capability.stagingSealSha256 !== fixed.stagingSealSha256 || capability.capabilitySealSha256 !== fixed.capabilitySealSha256) || capability.bundleSha256!==bundle.sha256 || common.canonical(capability.bundleFdIdentity)!==common.canonical({bytes:bundle.bytes,dev:bundle.dev,ino:bundle.ino,fd:3,seals:15}) || capability.state !== "AUTHORIZED" || ppid !== capability.parent.pid || common.canonical(parent) !== common.canonical(capability.parent) || common.sha256(Buffer.from(nonce)) !== capability.nonceSha256 || capability.oneUse !== true) common.fail("BROKER_AUTHORIZATION");
+  const ledgerRead = await read(ledgerPath), ledger = common.parseCanonicalJson(ledgerRead.bytes), historyNames = fs.readdirSync(historyPath).sort(), history = []; for (const [i,name] of historyNames.entries()) { if (name !== `ledger-${String(i+1).padStart(4,"0")}.json`) common.fail("BROKER_AUTHORIZATION"); const row = await read(path.join(historyPath,name)); history.push({name,bytes:row.bytes,sha256:common.sha256(row.bytes),value:common.parseCanonicalJson(row.bytes)}); } const latest = lifecycleAuthority.validateLedgerChain(history,fixed); if (!ledgerRead.bytes.equals(latest.bytes)) common.fail("BROKER_AUTHORIZATION"); const sidecars = await Promise.all(sidecarPaths.map(read));
+  const sidecarValues = sidecars.map((row) => common.parseCanonicalJson(row.bytes)), validatedAt = sidecarValues[0]?.validatedAt, pair = options.reviewPair || await review.readPair(root, { fixed, uid, nowMs: Date.parse(validatedAt), requireFresh: false });
+  if (!common.exactKeys(ledger, lifecycleAuthority.LEDGER_KEYS) || ledger.schemaVersion !== "robin-runtime-r2/consumption-ledger-v4" || ledger.claimId !== common.STEM || ledger.executionId !== common.EXECUTION_ID || ledger.packageManifestSha256 !== capability.packageManifestSha256 || ledger.packageAggregateSha256 !== capability.packageAggregateSha256 || ledger.stagingSealSha256 !== capability.stagingSealSha256 || ledger.capabilitySealSha256 !== capability.capabilitySealSha256 || common.sha256(ledgerRead.bytes) !== capability.ledgerSha256 || common.canonical(sidecars.map((row) => common.sha256(row.bytes))) !== common.canonical(capability.sidecarSha256) || ledger.state !== "CONSUMED" || ledger.consumedSlots?.join("") !== "AB" || ledger.broker?.state !== "INTENDED" || ledger.broker.opened !== 0 || ledger.oneRun !== true || ledger.noRetry !== true || common.canonical(ledger.reviewBytesSha256) !== common.canonical(pair.rows.map((x) => x.byteSha256)) || common.canonical(ledger.reviewerCommitments) !== common.canonical(pair.rows.map((x) => x.review.reviewerCommitment))) common.fail("BROKER_AUTHORIZATION");
+  for (let i = 0; i < 2; i += 1) { const row = sidecarValues[i], slot = i ? "B" : "A"; if (!common.exactKeys(row, ["schemaVersion","claimId","executionId","slot","reviewBytesSha256","reviewerCommitment","validatedAt","oneRunConsumed","noRetry"]) || row.schemaVersion !== "robin-runtime-r2/review-consumption-v3" || row.claimId !== common.STEM || row.executionId !== common.EXECUTION_ID || row.slot !== slot || row.reviewBytesSha256 !== pair.rows[i].byteSha256 || row.reviewerCommitment !== pair.rows[i].review.reviewerCommitment || row.validatedAt !== validatedAt || row.oneRunConsumed !== true || row.noRetry !== true || ledger.sidecars[i]?.sha256 !== common.sha256(sidecars[i].bytes)) common.fail("BROKER_AUTHORIZATION"); }
+  const marker = { schemaVersion: "robin-runtime-r2/broker-consumed-claim-v1", claimId: common.STEM, executionId: common.EXECUTION_ID, root, capabilitySha256: common.sha256(capabilityRead.bytes), parent, nonceSha256: capability.nonceSha256, state: "CLAIMED" }, markerResult = await common.durableCreate(claimPath, Buffer.from(`${common.canonical(marker)}\n`), { operations, syncDirectory: options.syncDirectory }); if (markerResult.status !== common.CREATE.DURABLE_CREATED) common.fail("BROKER_AUTHORIZATION");
+  const consumed = lifecycleAuthority.deriveCapabilitySuccessor(capability); common.requireDurable(await common.durableReplace(capabilityPath, lifecycleAuthority.canonicalBytes(consumed), { operations, token: "broker-capability-consumed", syncDirectory: options.syncDirectory })); return consumed;
+}
+async function serve(options = {}) {
+  configureProcess(); const input = options.input || process.stdin, output = options.output || process.stdout, root = options.root || (options.synthetic ? process.cwd() : common.verifiedUser(options).root); let authorized = false, opened = false, pending = Buffer.alloc(0), done = false, parentLost = false;
+  const abort = () => { if (!done) { parentLost = true; process.exitCode = 73; } };
+  input.on("end", abort); input.on("close", abort); input.on("error", abort);
+  const expectedParent = options.parentIdentity; const parentTimer = expectedParent ? setInterval(() => { if (!common.processIdentityAlive(expectedParent, options)) { parentLost = true; process.exitCode = 73; input.destroy?.(); } }, 250) : null; parentTimer?.unref?.();
+  const finish = (value) => { clearInterval(parentTimer); input.pause?.(); input.removeAllListeners?.("data"); input.removeAllListeners?.("end"); input.removeAllListeners?.("close"); input.removeAllListeners?.("error"); return value; };
+  return new Promise((resolve) => { input.on("data", async (chunk) => { if (done) return; pending = Buffer.concat([pending, chunk]); if (pending.length > 256) { done = true; process.exitCode = 74; return resolve(finish(false)); }
+      try { if (!authorized) { const end = pending.indexOf(0x0a); if (end < 0) return; const line = pending.subarray(0, end + 1).toString("ascii"), match = /^R2AUTH ([0-9a-f]{64})\n$/.exec(line); if (!match) common.fail("BROKER_AUTHORIZATION"); pending = pending.subarray(end + 1); const consumed = await authorize(root, match[1], options); authorized = true; options.parentIdentity = consumed.parent; if (!output.write(ACK)) await new Promise((r) => output.once("drain", r)); }
+        if (!opened && pending.length >= GO.length) { if (!pending.subarray(0, GO.length).equals(GO) || pending.length !== GO.length) common.fail("BROKER_AUTHORIZATION"); opened = true; pending = Buffer.alloc(0); const rows = await readFiles({ ...options, parentAlive: () => !parentLost && (!options.parentIdentity || common.processIdentityAlive(options.parentIdentity, options)) }); for (let i = 0; i < rows.length; i += 1) if (!output.write(frame(i, rows[i]))) await new Promise((r) => output.once("drain", r)); output.write(frame(255)); done = true; resolve(finish(true)); }
+      } catch (_) { done = true; process.exitCode = 75; resolve(finish(false)); } }); });
+}
+async function main(argv = process.argv.slice(2)) { if (argv.length !== 1 || argv[0] !== "--broker" || process.platform !== "linux") common.fail("BROKER_ARGUMENT_REJECTED"); await serve(); }
+module.exports = { AUTH_PREFIX, GO, ACK, CAPS, CODES, FILE_OPERATIONS, identity, sameIdentity, frame, parseFrames, readFiles, configureProcess, authorize, serve, main };
+if (require.main === module) main().catch(() => { process.exitCode = 76; });

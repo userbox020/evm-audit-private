@@ -1,0 +1,475 @@
+{% extends 'base.html' %}
+{% block title %}Watchboard · Re-arm Canary{% endblock %}
+{% block body_class %}canary-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='canary.css') }}"><script src="{{ url_for('static', filename='canary.js') }}" defer></script>{% endblock %}
+{% block content %}
+{% set batch = data.batch %}
+{% macro evidence_age(source, aging=600, stale=1800) -%}
+  <span class="canary-age" data-canary-age="{{ source.age if source.age is defined and source.age is not none else '' }}" data-freshness="{{ source.freshness|default('UNKNOWN', true) }}" data-aging-after="{{ aging }}" data-stale-after="{{ stale }}"><span data-age-state class="pill {{ source.freshness|default('UNKNOWN', true)|lower }}">{{ source.freshness|default('UNKNOWN', true)|replace('_', ' ')|title }}</span> <span data-age-value>{% if source.age is defined and source.age is not none %}· {{ source.age|int }}s old{% else %}· age unknown{% endif %}</span></span>
+{%- endmacro %}
+{% macro deadline(at, remaining=none, ended=false, label='Window ended', execution=false, historical=false) -%}
+  <span data-canary-deadline="{{ at }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-ended="{{ 'true' if ended else 'false' }}" data-ended-label="{{ label }}"{% if execution %} data-execution-deadline="true"{% endif %}{% if historical %} data-historical-deadline="true"{% endif %}><time datetime="{{ at }}">{{ at }}</time> · <span data-deadline-state class="{{ ('pill neutral' if historical else 'pill warn') if ended else 'window-context' }}">{% if ended %}{{ label }}{% elif remaining is not none %}{{ remaining|int }}s remaining at server check{% else %}End time recorded; waiting for clock check{% endif %}</span></span>
+{%- endmacro %}
+{% macro dedicated_window(watch_batch) -%}
+  {%- if watch_batch and watch_batch.monitor_ends_at -%}
+    {{ deadline(watch_batch.monitor_ends_at, watch_batch.expires_in, watch_batch.expired, 'Dedicated monitor window ended') }}
+  {%- elif watch_batch and watch_batch.expires_at -%}
+    <span class="pill neutral">{{ 'Recorded window ended' if watch_batch.expired else 'Legacy recorded end' }}</span> <span class="window-context">Snapshot metadata: <time>{{ watch_batch.expires_at }} UTC</time>; not a current monitor deadline.</span>
+  {%- else -%}No scheduled monitor end{%- endif -%}
+{%- endmacro %}
+{% macro multichain_window(watch_batch) -%}
+  {%- if watch_batch and watch_batch.expires_at -%}
+    {{ deadline(watch_batch.expires_at, watch_batch.expires_in, watch_batch.expired, 'Historical multichain window closed', historical=true) }}
+  {%- else -%}Historical multichain end not reported{%- endif -%}
+{%- endmacro %}
+{% macro observation_mode(source) -%}
+  {%- if source.observation_mode == 'READ_ONLY_ONCE' -%}<span class="pill neutral" data-observation-mode="READ_ONLY_ONCE">Read-only · one pass</span>
+  {%- else -%}Observation mode not reported{%- endif -%}
+{%- endmacro %}
+{% macro historical_window_state(source) -%}
+  {%- set labels = {'NOT_STARTED': 'Historical window not started', 'OPEN': 'Within the recorded historical window', 'WINDOW_CLOSED': 'Historical window closed', 'INVALID': 'Historical window metadata invalid'} -%}
+  {%- if source.historical_monitoring_window_state in labels -%}<span class="pill neutral" data-historical-window-state="{{ source.historical_monitoring_window_state }}">{{ labels[source.historical_monitoring_window_state] }}</span>
+  {%- elif source.window_state is defined and source.window_state -%}Legacy metadata state: {{ source.window_state }} · historical window only
+  {%- else -%}Historical window state not reported{%- endif -%}
+{%- endmacro %}
+
+<section class="hero overview-hero" data-canary-panel="intro">
+  <div><p class="eyebrow">READ-ONLY CANARY · MONITORING BATCH {{ batch.name if batch else 'UNAVAILABLE' }}</p>
+  <h1>Exploit re-arm<br><em>canary.</em></h1>
+  <p class="lede">Recorded signals, feed health, and execution limits—shown separately. This page reads local evidence; it never signs or broadcasts.</p></div>
+  <aside class="safety-stamp" aria-label="Read-only safety boundary"><strong>No on-chain actions</strong><span>Sentinel: no signing, no broadcast</span><small>Live actions require a separately verified signed execution batch.</small></aside>
+</section>
+
+<section class="canary-live-strip" data-canary-live aria-label="Display update status">
+  <div><p class="eyebrow">DISPLAY UPDATES · EVERY 60 SECONDS</p><p data-refresh-status role="status" aria-live="polite" aria-atomic="true">Display loaded. Waiting for automatic updates.</p></div>
+  <p class="canary-live-context">A connected display does not mean a Windows job is running or an execution window is open. Source timestamps appear in each panel. <a href="/jobs">Inspect Windows jobs →</a></p>
+  <noscript>JavaScript is off. Ages and remaining times are page-load values; reload to check again.</noscript>
+</section>
+
+<section class="canary-authority" aria-labelledby="authority-title" data-canary-panel="authority">
+  <div><p class="eyebrow">SIGNED EXECUTION · SEPARATE FROM MONITORING</p><h2 id="authority-title">Execution authority</h2>
+    <p>These checks describe the fixed Canary execution batch, not global runner approval. Monitor snapshots show observations, not an armed executor. Even a FIRED signal or a valid batch alone does not make a route executable.</p></div>
+  <dl class="canary-authority-facts">
+    <div><dt>Signed batch state at server check</dt><dd><span class="pill unknown" data-canary-authority-state="{{ data.execution.authorization_state }}">{{ data.execution.authorization_state }}</span> <small>Verification: {{ data.execution.verification }}</small></dd></div>
+    <div><dt>Signed batch shutdown</dt><dd>{% if data.execution.verification == 'VERIFIED' and data.execution.expires_at %}{{ deadline(data.execution.expires_at, data.execution.expires_in, data.execution.authorization_state == 'EXPIRED', 'Execution window ended', true) }}{% elif data.execution.authorization_state == 'ABSENT' %}No signed shutdown time — no signed batch{% else %}Unknown — no verified expiry{% endif %}</dd></div>
+    <div><dt>Execution readiness</dt><dd><span class="pill unknown">{{ data.execution.readiness }}</span> {{ data.execution.readiness_reason }}</dd></div>
+    <div><dt>Route scope</dt><dd>{{ data.execution.scope }}</dd></div>
+  </dl>
+  <p class="ops-note">Countdowns can mark a window ended; they cannot extend it or grant permission. After sleep or reconnect, a server check is required. The state and authority of other execution controllers are not reported here.</p>
+</section>
+
+<section class="ops-region" aria-labelledby="runner-title" data-canary-panel="runner">
+  <div class="section-heading"><div><p class="eyebrow">RUNNER HEALTH · PUBLICATION STATUS ONLY</p><h2 id="runner-title">Canary runner status</h2></div>
+  <p>Whether the local runner recorded a completed run and published its feed artifacts for that run. UPDATED records successful publication for that run; freshness is shown separately. It is not proof of a current publication and not full route readiness. Observations appear below this panel. No restart, lock-clearing, or authority controls exist on this page.</p></div>
+  {% set runner = data.runner or {} %}
+  {% if not runner.available %}
+  <div class="ops-empty"><strong>Runner status unavailable.</strong><p>Publication metadata is absent or failed validation, so runner state is not inferred.</p></div>
+  {% else %}
+  {% set runner_status = runner.status or 'UNAVAILABLE' %}
+  <article class="ops-card canary-card" aria-labelledby="runner-card-title">
+    <header>
+      <div><p class="eyebrow">RUNNER</p><h3 id="runner-card-title">Feed runner publication health</h3></div>
+      <div class="ops-card-head-side">
+        <span class="pill {{ 'error' if runner_status == 'FAILED' else ('warn' if runner_status in ['BLOCKED', 'DEGRADED'] else 'neutral') }}">{{ runner_status }}</span>
+        {{ evidence_age(runner) }}
+      </div>
+    </header>
+    <dl class="canary-state-grid">
+      <div><dt>Observation mode</dt><dd>{{ observation_mode(runner) }}<small>Reason: {{ runner.reason or 'Not reported' }}</small></dd></div>
+      <div><dt>Recorded publication</dt><dd>{% if runner.generated_at %}<time datetime="{{ runner.generated_at }}">{{ runner.generated_at }}</time>{% else %}Not reported{% endif %}{% if runner.started_at %}<small>Run started: {{ runner.started_at }}</small>{% endif %}</dd></div>
+      <div><dt>Feeds updated</dt><dd>{{ runner.updated_count if runner.updated_count is not none else 'Not reported' }}<small>UPDATED records successful publication for that run; freshness is shown separately.</small></dd></div>
+      <div><dt>Historical multichain window end</dt><dd>{% if runner.monitoring_ends_at %}{{ deadline(runner.monitoring_ends_at, none, runner.historical_monitoring_window_state == 'WINDOW_CLOSED' or runner.window_state == 'EXPIRED', 'Historical multichain window closed', historical=true) }}{% elif runner.window_state == 'OPEN_ENDED' %}No end recorded in historical metadata{% else %}Historical end not reported{% endif %}<small>{{ historical_window_state(runner) }}</small></dd></div>
+    </dl>
+    {% if runner.feeds %}
+    <div class="table-wrap" aria-label="Runner feed publication statuses" role="region" tabindex="0">
+      <table class="coverage-table">
+        <thead><tr><th scope="col">Feed</th><th scope="col">Published this run</th><th scope="col">Source timestamp / age</th><th scope="col">Observation outcome</th></tr></thead>
+        <tbody>
+        {% for feed in runner.feeds %}
+          <tr>
+            <td>{{ feed.label|default(feed.id|default(feed, true), true) }}<small>{{ observation_mode(feed) }}</small>{% if feed.historical_monitoring_window_state %}<small>{{ historical_window_state(feed) }}</small>{% endif %}</td>
+             <td>{% if feed.updated is boolean %}{{ 'yes' if feed.updated else 'no' }}{% elif feed.updated is not none %}{{ feed.updated }}{% else %}—{% endif %}</td>
+             <td>{% if feed.generated_at %}<time datetime="{{ feed.generated_at }}">{{ feed.generated_at }}</time>{% else %}Not reported{% endif %}<small>{{ evidence_age(feed) }}</small></td>
+             <td>{{ feed.verdict or '—' }}{% if feed.reason %} <small>{{ feed.reason }}</small>{% endif %}{% if feed.exit_code is defined and feed.exit_code is not none %}<small>Exit code: {{ feed.exit_code }}</small>{% endif %}{% if feed.incomplete_count is defined and feed.incomplete_count is not none %}<small>{{ feed.incomplete_count }} incomplete checks</small>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+    <p class="ops-note">The historical multichain window is not a producer deadline. Fresh read-only observations can continue after that window closes, without renewing its dates or granting execution permission. Publication status, source freshness, and the fixed execution batch above remain separate. No restart or authority controls are available here.</p>
+  </article>
+  {% endif %}
+</section>
+
+<div data-canary-panel="dedicated">
+{% if not data.available %}
+<section class="now-panel" aria-labelledby="unavailable-title">
+  <div class="section-heading"><div><p class="eyebrow">DEDICATED ETHEREUM FEED · UNAVAILABLE</p><h2 id="unavailable-title">Dedicated sentinel status is unavailable</h2></div>
+  <p>This source is missing or failed validation. Publication time, age, and monitor deadline are unknown; other panels remain independent.</p></div>
+</section>
+{% else %}
+<section class="canary-banner {{ 'fired' if data.verdict == 'FIRED' else 'dormant' if data.verdict == 'DORMANT' else 'incomplete' if data.verdict == 'INCOMPLETE' else '' }}">
+  <div>
+    <p class="eyebrow">DEDICATED ETHEREUM FEED · RECORDED OUTCOME</p>
+    <h2>{{ data.verdict }}{% if data.fired_sentinels %} · {{ data.fired_sentinels|join(', ') }}{% endif %}</h2>
+    <p>Last sentinel read at <strong>{{ data.generated_at }}</strong> (UTC) · pin block {{ data.pin_block }} ·
+      {{ evidence_age(data) }}</p>
+    <details class="canary-details" id="canary-dedicated-pin"><summary>Snapshot and batch details</summary><dl class="canary-batch-facts"><div><dt>Batch started</dt><dd>{{ batch.started_at or 'Not reported' }}</dd></div><div><dt>Historical dedicated batch end</dt><dd>{% if batch.expires_at %}<time datetime="{{ batch.expires_at }}">{{ batch.expires_at }}</time> · recorded metadata, not a current monitor cutoff{% else %}Not recorded{% endif %}</dd></div><div><dt>Pin hash</dt><dd><code>{{ data.pin_hash or 'Not reported' }}</code></dd></div></dl></details>
+  </div>
+  <dl class="canary-batch-facts">
+     <div><dt>Monitor batch (metadata only)</dt><dd>{{ batch.name }}</dd></div>
+    <div><dt>Chain</dt><dd>Ethereum mainnet ({{ batch.chain_id }})</dd></div>
+      <div><dt>Dedicated monitor end</dt><dd>{{ dedicated_window(batch) }}</dd></div>
+    <div><dt>Recorded monitor caps</dt><dd>≤{{ batch.caps.capitalEthPerAction }} ETH capital · ≤{{ batch.caps.gasCeilingEthPerTx }} ETH gas/tx · no flash loans · no slippage-critical legs</dd></div>
+    <div><dt>Profit destination</dt><dd><code>{{ batch.profit_destination[:6] }}…{{ batch.profit_destination[-4:] }}</code> (watchlist "main")</dd></div>
+  </dl>
+</section>
+<p class="ops-note">Monitor metadata expiry is not signed execution approval. An older snapshot may record a past window, but that date is not a current cutoff. Signed batch verification and shutdown are shown separately above; route-specific arming is not connected.</p>
+
+<section class="ops-region" aria-labelledby="sentinels-title">
+  <div class="section-heading"><div><p class="eyebrow">FIRE CONDITIONS · ONE BY ONE</p><h2 id="sentinels-title">Sentinels</h2></div>
+   <p>Each sentinel re-checks its exact re-open predicate on every run. A fire alone is not an action: unattended execution is not yet connected. Live action needs a signed, exact-scope batch, a fresh route-real check, and conservative <code>net &gt; 0</code> after all costs.</p></div>
+
+  {% for sentinel in data.sentinels %}
+  <article class="ops-card canary-card" aria-labelledby="sent-{{ loop.index }}-title">
+    <header>
+       <div><p class="eyebrow">SENTINEL {{ loop.index }}/{{ data.sentinels|length }}</p><h3 id="sent-{{ loop.index }}-title">{{ sentinel.id }}</h3></div>
+     </header>
+     <dl class="canary-state-grid">
+       <div><dt>Signal</dt><dd><span class="pill {{ 'warn' if sentinel.fired else ('clear' if sentinel.ok else 'unknown') }}">{{ 'FIRED' if sentinel.fired else ('DORMANT' if sentinel.ok else 'ERROR') }}</span></dd></div>
+       <div><dt>Execution readiness</dt><dd><span class="pill unknown">{{ sentinel.execution_readiness }}</span> <small>{{ sentinel.execution_reason }}</small></dd></div>
+       <div><dt>Signed batch · scope</dt><dd><span data-canary-authority-state="{{ data.execution.authorization_state }}">{{ data.execution.authorization_state }}</span> · {{ sentinel.batch_scope }}</dd></div>
+        <div><dt>Dedicated monitor end</dt><dd>{{ dedicated_window(batch) }}</dd></div>
+     </dl>
+    <p class="ops-note">{{ sentinel.reason }}{% if sentinel.error %} · error: {{ sentinel.error }}{% endif %}</p>
+    {% if sentinel.id == 'obol-govlst-rearm' %}
+    <dl class="canary-grid">
+      <div><dt>Recorded payout (OBOL)</dt><dd>{{ sentinel.view.payout_obol or '—' }}</dd></div>
+      <div><dt>Fee (OBOL)</dt><dd>{{ sentinel.view.fee_obol or '—' }}</dd></div>
+      <div><dt>Staker reward balance</dt><dd>{{ sentinel.view.staker_balance_obol or '—' }} OBOL</dd></div>
+      <div><dt>Σ unclaimed (owned deposits)</dt><dd>{{ sentinel.view.unclaimed_obol or '—' }} OBOL <small>({{ sentinel.view.owned_deposits }} deposits)</small></dd></div>
+      <div><dt>Structural surplus (before gas)</dt><dd>{{ sentinel.view.net_obol or '—' }} OBOL<small>Not an all-cost net profit estimate.</small></dd></div>
+    </dl>
+    <p class="ops-note">Recorded comparison: <code>min(staker balance, Σ unclaimed) − payout − fee</code>. Gas, acquisition, exit costs, and uncertainty are not deducted here. A positive value is a signal for review, not verified profit.</p>
+    {% elif sentinel.id == 'morpho-paxg-misscale' %}
+    <dl class="canary-grid">
+      <div><dt>Supply (USDC)</dt><dd>{{ sentinel.view.total_supply_usdc or '—' }}</dd></div>
+      <div><dt>Borrowed (USDC)</dt><dd>{{ sentinel.view.total_borrow_usdc or '—' }}</dd></div>
+      <div><dt>Available liquidity</dt><dd>{{ sentinel.view.available_usdc or '—' }} USDC</dd></div>
+      <div><dt>Oracle price (raw, not USD)</dt><dd><code>{{ sentinel.view.oracle_price_wei or '—' }}</code><small>Morpho's 1e36-scaled loan/collateral base-unit ratio. Token decimals matter; this is not a dollar price.</small></dd></div>
+      <div><dt>Liquidation loan-to-value (WAD)</dt><dd>{{ sentinel.view.lltv or '—' }}<small>LLTV uses 1e18 = 100%.</small></dd></div>
+    </dl>
+    <p class="ops-note">Read-only liquidity observation: <code>availableLiquidity &gt; 100 USDC</code> on market <code>0x8eaf…06c9</code>. Borrow proceeds create debt and are not profit. This signal does not establish liquidation eligibility or executable net profit, and does not qualify or authorize execution.</p>
+    {% else %}
+    <dl class="canary-grid">
+      {% for pair in sentinel.view.pairs %}
+      <div><dt>Pair {{ loop.index }} <code>{{ (pair.pair or '')[:10] }}…</code></dt>
+        <dd>{{ pair.candidates or 0 }} log candidates → {{ pair.borrowers or 0 }} borrower(s)
+        {% if pair.window %}· last borrower <code>{{ (pair.window.borrower or '')[:10] }}…</code>: ratio <strong>{{ pair.window.ratio_bips or '—' }}</strong> bips, liquidate eth_call <strong>{{ pair.window.liquidate_eth_call or '—' }}</strong>{% endif %}
+        {% if pair.error %}· error: {{ pair.error }}{% endif %}</dd></div>
+      {% endfor %}
+    </dl>
+    <p class="ops-note">This signal records the result of a read-only liquidation check at the observed pin. A successful check does not establish a profitable exit, current eligibility, or permission to execute.</p>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+</div>
+
+<section class="ops-region" aria-labelledby="multichain-title" data-canary-panel="multichain">
+  <div class="section-heading"><div><p class="eyebrow">MULTICHAIN SENTINELS · READ-ONLY STATUS</p><h2 id="multichain-title">Multichain canary</h2></div>
+  <p>{% if data.multichain.available %}This snapshot contains {{ data.multichain.groups|map(attribute='sentinels')|map('length')|sum }} sentinels across {{ data.multichain.groups|length }} chain groups. {% endif %}Coverage reflects the published source, not guaranteed complete or continuous monitoring. Read-only: no signing, no broadcast.</p></div>
+
+  {% if not data.multichain.available %}
+    <div class="ops-empty"><strong>Multichain sentinel artifact unavailable.</strong><p>This source is missing or failed validation. Publication time, age, and historical window end are unknown.</p></div>
+  {% else %}
+  <p class="ops-note">Last multichain read at <strong>{{ data.multichain.generated_at }}</strong> (UTC) · verdict <span class="pill {{ 'warn' if data.multichain.verdict == 'FIRED' else ('unknown' if data.multichain.verdict == 'INCOMPLETE' else 'clear') }}">{{ data.multichain.verdict }}</span>{% if data.multichain.verdict == 'INCOMPLETE' %} · some checks incomplete{% endif %} · {{ data.multichain.fired_count }} fired{% if data.multichain.fired_sentinels %} ({{ data.multichain.fired_sentinels|join(', ') }}){% endif %}
+     · {{ evidence_age(data.multichain) }}</p>
+  <p class="ops-note">{{ observation_mode(data.multichain) }} · {{ historical_window_state(data.multichain) }}</p>
+  <p class="ops-note"><strong>Historical multichain window end (metadata only):</strong> {{ multichain_window(data.multichain.batch) }}. Read-only observations may continue after this date. It is not a producer deadline or signed execution approval.</p>
+  <details class="canary-details" id="canary-multichain-pins"><summary>Batch start and chain pins</summary><p class="ops-note">Batch started: {{ data.multichain.batch.started_at or 'Not reported' }}</p>
+  <div class="table-wrap" aria-label="Multichain chain pins" role="region" tabindex="0">
+    <table class="coverage-table">
+      <thead><tr><th scope="col">Chain</th><th scope="col">Read qualification</th><th scope="col">Pin block / hash</th></tr></thead>
+      <tbody>
+      {% for chain in data.multichain.chains %}
+        <tr><td>{{ chain.alias }} ({{ chain.chain_id }})</td>
+          <td>{% if chain.qualified %}<span class="pill clear">QUALIFIED</span>{% else %}<span class="pill unknown">{{ chain.reason or 'unavailable' }}</span>{% endif %}</td>
+          <td>{{ chain.block if chain.block is not none else '—' }}<small class="canary-hash">{{ chain.hash or 'Hash not reported' }}</small></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div></details>
+
+  {% for group in data.multichain.groups %}
+  <article class="ops-card canary-card" aria-labelledby="mc-{{ group.chain_id }}-title">
+    <header>
+      <div><p class="eyebrow">CHAIN {{ group.chain_id }}{% if not group.qualified %} · {{ group.reason or 'unavailable' }}{% endif %}</p>
+      <h3 id="mc-{{ group.chain_id }}-title">{{ group.alias }} · {{ group.sentinels|length }} sentinel{{ '' if group.sentinels|length == 1 else 's' }}</h3></div>
+      <div class="ops-card-head-side"><span class="pill {{ 'warn' if group.sentinels|selectattr('fired')|list else ('unknown' if group.sentinels|rejectattr('ok')|list else 'clear') }}">{{ group.sentinels|selectattr('fired')|list|length }} fired</span>{% if group.sentinels|rejectattr('ok')|list %} <span class="pill unknown">INCOMPLETE</span>{% endif %}</div>
+    </header>
+    {% for sentinel in group.sentinels %}
+     <div class="canary-sentinel-row"><strong>{{ sentinel.id }}</strong>
+       <dl class="canary-state-grid">
+         <div><dt>Signal</dt><dd><span class="pill {{ 'warn' if sentinel.fired else ('clear' if sentinel.ok else 'unknown') }}">{{ 'FIRED' if sentinel.fired else ('DORMANT' if sentinel.ok else 'ERROR') }}</span></dd></div>
+         <div><dt>Execution readiness</dt><dd><span class="pill unknown">{{ sentinel.execution_readiness }}</span> <small>{{ sentinel.execution_reason }}</small></dd></div>
+         <div><dt>Signed batch · scope</dt><dd><span data-canary-authority-state="{{ data.execution.authorization_state }}">{{ data.execution.authorization_state }}</span> · {{ sentinel.batch_scope }}</dd></div>
+          <div><dt>Historical window end</dt><dd>{{ multichain_window(data.multichain.batch) }}</dd></div>
+       </dl>
+     </div>
+    <p class="ops-note">{{ sentinel.reason }}{% if sentinel.error %} · error: {{ sentinel.error }}{% endif %}</p>
+    {% if sentinel.markets %}
+    <div class="table-wrap" aria-label="Equity-class markets" role="region" tabindex="0">
+      <table class="coverage-table">
+        <thead><tr><th scope="col">Pair</th><th scope="col">Borrow (USD)</th><th scope="col">Read</th></tr></thead>
+        <tbody>
+        {% for market in sentinel.markets %}
+          <tr><td>{{ market.pair }}</td><td>{{ market.borrow_usd if market.borrow_usd is not none else '—' }}</td>
+            <td>{% if market.ok %}<span class="pill clear">OK</span>{% else %}<span class="pill unknown">{{ market.error or 'ERROR' }}</span>{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </article>
+  {% endfor %}
+  {% if data.multichain.history_available and data.multichain.runs %}
+  <div class="table-wrap" aria-label="Multichain canary run history" role="region" tabindex="0">
+    <table class="coverage-table">
+      <thead><tr><th scope="col">Run (UTC)</th><th scope="col">Verdict</th><th scope="col">Fired sentinels</th></tr></thead>
+      <tbody>
+      {% for run in data.multichain.runs %}
+        <tr class="{% if run.verdict == 'FIRED' %}row-fire{% endif %}">
+          <td>{{ run.at }}</td>
+          <td><span class="pill {{ 'warn' if run.verdict == 'FIRED' else ('unknown' if run.verdict == 'INCOMPLETE' else 'clear') }}">{{ run.verdict }}</span></td>
+          <td>{{ run.fired|join(', ') if run.fired else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% endif %}
+</section>
+
+<section class="ops-region" aria-labelledby="divergence-title" data-canary-panel="divergence">
+  <div class="section-heading"><div><p class="eyebrow">DYNAMIC ORACLE DIVERGENCE · CONSTANT-PRICE CANARY</p><h2 id="divergence-title">Oracle divergence canary</h2></div>
+  <p>Recorded Morpho oracle prices compared against independent Chainlink/DEX references (2% stable / 5% non-stable, sustained), plus liquidity watches for source-confirmed constant-price oracles. A FIRED row calls for review; it does not establish eligibility or profit.</p></div>
+
+  {% if not data.divergence.available %}
+    <div class="ops-empty"><strong>Oracle-divergence artifact unavailable.</strong><p>This source is missing or failed validation. Publication time and age are unknown. No separate monitor deadline is reported.</p></div>
+  {% else %}
+  <p class="ops-note">Last divergence read at <strong>{{ data.divergence.generated_at }}</strong> (UTC) · verdict <strong>{{ data.divergence.verdict }}</strong> · {{ data.divergence.fired_count }} fired · {{ data.divergence.sustained_count }} sustained
+    · reference coverage <strong>{{ data.divergence.coverage.referenceResolvedPct }}%</strong> ({{ data.divergence.coverage.referenceResolved }}/{{ data.divergence.coverage.universe }})
+      · {{ evidence_age(data.divergence) }} · No separate monitor deadline reported</p>
+  <p class="ops-note">Independent references: {{ data.divergence.coverage.referenceResolved }} of {{ data.divergence.coverage.universe }} sentinels resolvable. {{ data.divergence.coverage.constantOracles }} known feedless/constant oracle{{ '' if data.divergence.coverage.constantOracles == 1 else 's' }} tracked.</p>
+  <p class="ops-note"><strong>State guide:</strong> DORMANT means not triggered at the last observed pin, not profitable or executable. NO REFERENCE means a dynamic price comparison is unavailable; CONSTANT WATCH is a source-confirmed constant/feedless liquidity watch without a separate price comparator. INCOMPLETE means the read failed. Times and freshness describe snapshots, not continuous monitoring.</p>
+  <details class="canary-details" id="canary-divergence-pins"><summary>Chain pins at the last observation</summary><div class="table-wrap" aria-label="Divergence chain pins" role="region" tabindex="0">
+    <table class="coverage-table">
+      <thead><tr><th scope="col">Chain</th><th scope="col">Read qualification</th><th scope="col">Pin block / hash</th></tr></thead>
+      <tbody>
+      {% for chain in data.divergence.chains %}
+        <tr><td>{{ chain.alias }} ({{ chain.chain_id }})</td>
+          <td>{% if chain.qualified %}<span class="pill clear">QUALIFIED</span>{% else %}<span class="pill unknown">{{ chain.reason or 'unavailable' }}</span>{% endif %}</td>
+          <td>{{ chain.block if chain.block is not none else '—' }}<small class="canary-hash">{{ chain.hash or 'Hash not reported' }}</small></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div></details>
+
+  {% for group in data.divergence.groups %}
+  <article class="ops-card canary-card" aria-labelledby="dv-{{ group.chain_id }}-title">
+    <header>
+      <div><p class="eyebrow">CHAIN {{ group.chain_id }}{% if not group.qualified %} · {{ group.reason or 'unavailable' }}{% endif %}</p>
+      <h3 id="dv-{{ group.chain_id }}-title">{{ group.alias }} · {{ group.sentinels|length }} sentinel{{ '' if group.sentinels|length == 1 else 's' }}</h3></div>
+       <div class="ops-card-head-side"><span class="pill {{ 'warn' if group.sentinels|selectattr('fired')|list else 'clear' }}">{{ group.sentinels|selectattr('fired')|list|length }} fired</span>{% set incomplete_count = group.sentinels|rejectattr('ok')|list|length %}{% if incomplete_count %} <span class="pill unknown">{{ incomplete_count }} incomplete</span>{% endif %}</div>
+    </header>
+    <div class="table-wrap" aria-label="Divergence sentinels" role="region" tabindex="0">
+       <table class="coverage-table canary-divergence-table">
+         <thead><tr><th scope="col">Pair</th><th scope="col">Kind</th><th scope="col">Divergence (bps)</th><th scope="col">Threshold</th><th scope="col">Reference</th><th scope="col">Signal</th><th scope="col">Execution readiness</th><th scope="col">Signed batch · scope</th><th scope="col">Watch window end</th></tr></thead>
+        <tbody>
+        {% for sentinel in group.sentinels %}
+          <tr class="{% if sentinel.fired %}row-fire{% endif %}">
+            <td>{{ sentinel.pair or '—' }}{% if sentinel.scale_suspect %} <span class="pill unknown">SCALE?</span>{% endif %}</td>
+            <td>{{ sentinel.kind }}</td>
+            <td>{{ sentinel.divergence_bps if sentinel.divergence_bps is not none else '—' }}</td>
+            <td>{{ sentinel.threshold_bps }}</td>
+             <td>{% if sentinel.reference_ok %}<span class="pill clear">OK</span>{% elif sentinel.feedless %}<span class="pill neutral">NOT NEEDED</span>{% else %}<span class="pill unknown">NONE</span>{% endif %}</td>
+              <td><span class="pill {{ 'warn' if sentinel.fired else ('unknown' if not sentinel.ok or not sentinel.reference_ok else 'clear') }}">{{ 'FIRED' if sentinel.fired else ('INCOMPLETE' if not sentinel.ok else ('CONSTANT WATCH' if sentinel.feedless and not sentinel.reference_ok else ('NO REFERENCE' if not sentinel.reference_ok else 'DORMANT'))) }}</span></td>
+              <td><span class="pill unknown">{{ sentinel.execution_readiness }}</span> <small>{{ sentinel.execution_reason }}</small></td>
+              <td><span data-canary-authority-state="{{ data.execution.authorization_state }}">{{ data.execution.authorization_state }}</span><small>{{ sentinel.batch_scope }}</small></td>
+              <td>No monitor window configured</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% for sentinel in group.sentinels if sentinel.fired or not sentinel.ok or not sentinel.reference_ok %}
+    <details class="canary-details canary-diagnostic" id="canary-diagnostic-{{ group.chain_id }}-{{ sentinel.id }}"><summary>{{ sentinel.pair or sentinel.id }} · {{ 'FIRED' if sentinel.fired else ('INCOMPLETE' if not sentinel.ok else ('CONSTANT WATCH' if sentinel.feedless else 'NO REFERENCE')) }}</summary>
+      <p class="ops-note"><strong>{{ sentinel.id }}</strong> · {{ sentinel.reason or 'No diagnostic reason reported.' }}{% if sentinel.error %} · Read error: {{ sentinel.error }}{% endif %}{% if sentinel.reference_source %} · Reference: {{ sentinel.reference_source }}{% endif %}</p>
+      <dl class="canary-grid"><div><dt>Oracle ratio</dt><dd>{{ sentinel.oracle_ratio if sentinel.oracle_ratio is not none else 'Unavailable' }}</dd></div><div><dt>Reference ratio</dt><dd>{{ sentinel.reference_ratio if sentinel.reference_ratio is not none else 'Unavailable' }}</dd></div><div><dt>Consecutive checks over threshold</dt><dd>{{ sentinel.consecutive_over }}</dd></div></dl>
+    </details>
+    {% endfor %}
+  </article>
+  {% endfor %}
+  {% endif %}
+</section>
+
+<section class="ops-region" aria-labelledby="history-title" data-canary-panel="history">
+  <div class="section-heading"><div><p class="eyebrow">RUN LOG</p><h2 id="history-title">Recent sentinel runs</h2></div>
+  <p>Bounded history (last 12 of 50 stored runs), newest first.</p></div>
+  {% if not data.history_available %}
+  <div class="ops-empty"><strong>Run history unavailable.</strong><p>The history source is absent or failed validation. It is independent of the current feed.</p></div>
+  {% elif not data.runs %}
+  <div class="ops-empty"><strong>No recorded runs.</strong><p>The validated history source contains no entries.</p></div>
+  {% else %}
+  <div class="table-wrap" aria-label="Canary run history" role="region" tabindex="0">
+    <table class="coverage-table">
+      <thead><tr><th scope="col">Run (UTC)</th><th scope="col">Pin block</th><th scope="col">Verdict</th><th scope="col">Fired sentinels</th></tr></thead>
+      <tbody>
+      {% for run in data.runs %}
+        <tr class="{% if run.verdict == 'FIRED' %}row-fire{% endif %}">
+          <td>{{ run.at }}</td>
+          <td>{{ run.block }}</td>
+           <td><span class="pill {{ 'warn' if run.verdict == 'FIRED' else ('unknown' if run.verdict == 'INCOMPLETE' else 'clear') }}">{{ run.verdict }}</span></td>
+          <td>{{ run.fired|join(', ') if run.fired else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+
+<section class="ops-region" aria-labelledby="tx-title" data-canary-panel="transactions">
+  <div class="section-heading"><div><p class="eyebrow">BOT WALLET · READ-ONLY HISTORY</p><h2 id="tx-title">Transactions</h2></div>
+  <p>Recent outbound transactions for the bot wallet{% if data.transactions.wallet_short %} <code>{{ data.transactions.wallet_short }}</code>{% endif %}, newest first, bounded. The collector enumerates nonces over public RPC only; it never signs or broadcasts.</p></div>
+  {% if not data.transactions.available %}
+  <div class="ops-empty"><strong>Transaction feed unavailable.</strong><p>This source is absent or failed validation. Publication time and age are unknown; no activity is inferred.</p></div>
+  {% else %}
+  <p class="ops-note">Source recorded <strong>{{ data.transactions.as_of }}</strong> (UTC) · {{ evidence_age(data.transactions, 7200, 21600) }} · {{ data.transactions.row_count }} row{{ '' if data.transactions.row_count == 1 else 's' }} · read-only (no signing, no broadcast)</p>
+  {% if not data.transactions.rows %}<div class="ops-empty"><strong>No transactions in this snapshot.</strong><p>The feed is available but contains no rows. This is not proof of no activity outside the collector's coverage.</p></div>{% else %}
+  <div class="table-wrap" aria-label="Bot wallet transactions" role="region" tabindex="0">
+    <table class="coverage-table tx-table">
+      <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Chain</th><th scope="col">Description</th><th scope="col" class="tx-amount-col">Amount</th><th scope="col">Status</th><th scope="col">Tx</th></tr></thead>
+      <tbody>
+      {% for row in data.transactions.rows %}
+        <tr class="{% if row.status == 'failed' %}row-fire{% endif %}">
+          <td>{{ row.time or '—' }}</td>
+          <td>{{ row.chain }} <small>{{ row.chain_id }}</small></td>
+          <td>{{ row.description }}{% if row.method_name %} <small>{{ row.method_name }}</small>{% endif %}</td>
+          <td class="tx-amount-col">
+            {% if row.amounts %}{% for amount in row.amounts %}<span class="tx-amount {{ amount.direction }}">{{ amount.formatted if amount.formatted is not none else '—' }}{% if amount.symbol %} {{ amount.symbol }}{% else %} <span class="tx-unknown" title="Token metadata unresolved">unknown token</span>{% endif %}</span>{% endfor %}{% else %}—{% endif %}
+          </td>
+          <td><span class="pill {{ 'clear' if row.status == 'mined' else ('error' if row.status == 'failed' else 'unknown') }}">{{ row.status|upper|replace('_', ' ') }}</span>{% if row.status|upper == 'RECEIPT_UNAVAILABLE' %}<small>Block inclusion is known; the receipt is unavailable. Success or failure is not confirmed.</small>{% endif %}</td>
+          <td>{% if row.explorer_url %}<a href="{{ row.explorer_url }}" rel="noreferrer noopener"><code>{{ row.short_hash }}</code></a>{% else %}<code>{{ row.short_hash }}</code>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if data.transactions.errors %}<p class="ops-note">Collector notes: {% for error in data.transactions.errors %}{{ error.scope }} — {{ error.message }}{{ '; ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {% endif %}
+</section>
+
+<section class="ops-region" aria-labelledby="balances-title" data-wallets>
+  <div class="section-heading"><div><p class="eyebrow">WALLETS · READ-ONLY</p><h2 id="balances-title">Balances</h2></div>
+  <p>Per-chain snapshot from the fixed first-party collector. The signing wallet stays private; add its address to the watchlist to display it. No signing is ever requested.</p></div>
+  <div class="canary-wallet-actions">
+    <button class="wallet-button primary" type="button" data-wallet-refresh>Refresh balances</button>
+    {% set collector_state = 'RUNNING' if collector.running else ('DEFERRED' if collector.last_error == 'OUTPUT_BUSY' else ('TIMEOUT' if collector.last_error == 'TIMEOUT' else ('FAILED' if collector.last_error or (collector.last_exit is number and collector.last_exit != 0) else collector.state|default('IDLE', true)))) %}
+    <span data-collector-status aria-live="polite">Collector {{ 'timed out' if collector_state == 'TIMEOUT' else collector_state|lower }}{% if collector.last_error %} · {{ collector.last_error }}{% elif collector.last_exit is not none %} · exit {{ collector.last_exit }}{% endif %}{% if collector.last_finished %} · finished {{ collector.last_finished }}{% endif %}{% if collector.running and collector.deadline_at %} · deadline {{ collector.deadline_at }}{% endif %}</span>
+    <p data-wallet-message class="wallet-message" role="alert" hidden></p>
+  </div>
+  <div data-canary-panel="collector-note">
+  {% if refresh %}
+  <p class="ops-note">Balance collection at the last server check:
+    {% if refresh.state == 'STARTED' %}<span class="pill clear">STARTED</span> a background balance collection was started.
+    {% elif refresh.state == 'RUNNING' %}<span class="pill unknown">RUNNING</span> a collection is already in flight.
+    {% elif refresh.state == 'NODE_UNAVAILABLE' %}<span class="pill error">NODE UNAVAILABLE</span> {{ refresh.hint }}
+    {% elif refresh.state == 'COOLDOWN' %}<span class="pill unknown">COOLDOWN</span> the last attempt was recent; not retrying yet.
+    {% elif refresh.state == 'FRESH' %}no new collection needed then. Current source age is shown below.
+    {% else %}status not reported.
+    {% endif %}
+  </p>
+  {% endif %}
+  {% if collector_hint %}<p class="ops-note"><span class="pill warn">COLLECTOR</span> {{ collector_hint }}</p>{% endif %}
+  </div>
+  <div data-canary-panel="balances">
+  {% if data.balances.available %}
+  <p class="ops-note">Source recorded <strong>{{ data.balances.as_of }}</strong> (UTC) · {{ evidence_age(data.balances, 1800, 5400) }} · {{ data.balances.chains|length }} EVM chain groups · {{ data.balances.rows|length }} address/chain rows{% if data.balances.solana %} · {{ data.balances.solana|length }} Solana rows{% endif %}.</p>
+  <p class="ops-note">Expand a chain to inspect every returned address and token. Missing reads and unpriced amounts are not zero. Display updates and balance collection are separate.</p>
+  {% if data.balances.stale %}<p class="ops-note"><span class="pill warn">STALE</span> These values are historical context. A display refresh does not guarantee a new balance collection.</p>{% endif %}
+  {% if data.balances.unpriced_chains %}<p class="ops-note"><span class="pill unknown">UNPRICED</span> Native pricing unavailable on: {{ data.balances.unpriced_chains|join(', ') }}. Amounts are shown; USD totals are withheld.</p>{% endif %}
+  {% if data.balances.errors %}<p class="ops-note">Collector notes: {% for error in data.balances.errors %}{{ error.scope }} — {{ error.message }}{{ '; ' if not loop.last }}{% endfor %}</p>{% endif %}
+  <div class="wallet-grid" aria-label="Watched wallet balances">
+    {% for chain in data.balances.chains %}
+    <details class="wallet-chain canary-wallet-chain" id="canary-balances-{{ chain.chain_id }}"{% if loop.index <= 2 %} open{% endif %}>
+      <summary>
+        <div><h4>{{ chain.chain }}</h4><span class="chain-id">chain {{ chain.chain_id }} · {{ chain.rows|length }} address{{ '' if chain.rows|length == 1 else 'es' }}</span></div>
+        <span class="pill {{ 'neutral' if chain.complete else 'unknown' }}" title="Chain subtotal across fully priced, fully read rows">{% if chain.subtotal_usd is not none %}Priced ${{ chain.subtotal_usd }}{% else %}Incomplete subtotal{% endif %}</span>
+      </summary>
+      {% for row in chain.rows %}
+      <div class="wallet-row{% if row.error %} error{% endif %}">
+        <div class="wallet-row-head">
+          <strong>{{ row.label or row.short }}</strong>
+          {% if row.is_profit_destination %}<span class="pill clear">PROFIT DEST.</span>{% endif %}
+          <span class="wallet-balance{% if row.native and row.native.is_zero %} zero{% endif %}">
+            {% if row.native and row.native.formatted is not none %}{{ row.native.formatted }}<small>{{ row.native.symbol }}</small>{% elif row.native %}<span class="no-data">no data</span>{% else %}<span class="pill neutral">no native</span>{% endif %}
+          </span>
+        </div>
+        <dl class="wallet-facts">
+          <div><dt>Address</dt><dd><code title="{{ row.address }}">{{ row.short }}</code></dd></div>
+          <div><dt>Block</dt><dd>{{ row.block if row.block is not none else '—' }}</dd></div>
+          <div><dt>Priced row total</dt><dd>{% if row.total_usd is not none %}≈ ${{ row.total_usd }}{% else %}Unavailable / incomplete{% endif %}</dd></div>
+          {% if row.native %}<div><dt>Native USD</dt><dd>{% if row.native.usd is not none %}≈ ${{ row.native.usd }}{% elif row.native.formatted is not none %}Unpriced{% else %}No data{% endif %}</dd></div>{% endif %}
+        </dl>
+        <div class="wallet-tokens">
+          {% for token in row.tokens %}
+          <span class="wallet-token{% if token.is_zero %} zero{% endif %}">{{ token.symbol }} <b>{% if token.formatted is not none %}{{ token.formatted }}{% else %}—{% endif %}</b>{% if token.is_no_data %} <span class="no-data">no data</span>{% elif token.usd is none %}<small> unpriced</small>{% endif %}{% if token.usd is not none %}<small> ≈ ${{ token.usd }}</small>{% endif %}</span>
+          {% else %}<span class="wallet-token muted">no tracked tokens</span>{% endfor %}
+        </div>
+        {% if row.error %}<p class="card-warning"><strong>Read error:</strong> {{ row.error }}</p>{% endif %}
+      </div>
+      {% endfor %}
+      <p class="wallet-facts chain-subtotal"><span>Chain subtotal (priced): {% if chain.subtotal_usd is not none %}≈ ${{ chain.subtotal_usd }}{% else %}— incomplete{% endif %}</span>{% if chain.native_symbol %}<span>Native: {{ chain.native_symbol }}</span>{% endif %}</p>
+    </details>
+    {% endfor %}
+    {% for row in data.balances.solana %}
+    <article class="wallet-chain solana">
+      <header><div><h4>Solana</h4><span class="chain-id">slot {{ row.slot if row.slot is not none else '—' }}</span></div><span class="pill neutral">solana</span></header>
+      <div class="wallet-row{% if row.error %} error{% endif %}">
+        <div class="wallet-row-head">
+          <strong>{{ row.label or row.short }}</strong>
+          {% if row.native and row.native.formatted is not none %}<span class="wallet-balance{% if row.native.is_zero %} zero{% endif %}">{{ row.native.formatted }}<small>{{ row.native.symbol }}</small></span>{% else %}<span class="pill neutral">no data</span>{% endif %}
+        </div>
+        <div class="wallet-tokens">
+          {% for token in row.tokens %}<span class="wallet-token{% if token.is_zero %} zero{% endif %}">{{ token.symbol }} <b>{{ token.formatted if token.formatted is not none else '—' }}</b>{% if token.usd is not none %}<small> ≈ ${{ token.usd }}</small>{% endif %}</span>{% else %}<span class="wallet-token muted">no tracked tokens</span>{% endfor %}
+        </div>
+        {% if row.error %}<p class="card-warning"><strong>Read error:</strong> {{ row.error }}</p>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% if data.balances.totals %}<p class="ops-note">Priced portion only: native <strong>{{ data.balances.totals.nativeUsd if data.balances.totals.nativeUsd is not none else '—' }}</strong> · stables <strong>{{ data.balances.totals.stableUsd if data.balances.totals.stableUsd is not none else '—' }}</strong> · combined <strong>{{ data.balances.totals.totalUsd if data.balances.totals.totalUsd is not none else '—' }}</strong>{% if data.balances.unpriced_chains %} · incomplete — unpriced: {{ data.balances.unpriced_chains|join(', ') }}{% endif %}. Stablecoin values use a $1.00 assumption, not an executable sale price.</p>{% endif %}
+  {% else %}
+  <div class="ops-empty"><strong>Balance artifact unavailable.</strong><p>No readable <code>wallet-balances</code> snapshot, so no balance is inferred. Use “Refresh balances”, or run <code>node tools/watch-wallet-balances.js --once</code>.</p>{% if refresh and refresh.state == 'NODE_UNAVAILABLE' %}<p class="ops-note"><span class="pill error">NODE UNAVAILABLE</span> {{ refresh.hint }}</p>{% endif %}</div>
+  {% endif %}
+  </div>
+  <form data-wallet-add class="canary-add-form" autocomplete="off" novalidate>
+    <label>Address<input type="text" name="address" autocomplete="off" spellcheck="false" placeholder="Paste an EVM (0x…) or Solana address to watch" aria-label="Watch address" maxlength="64"></label>
+    <label>Label (optional)<input type="text" name="label" autocomplete="off" placeholder="e.g. treasury" aria-label="Watch address label" maxlength="64"></label>
+    <button class="wallet-button" type="submit">Add &amp; refresh</button>
+  </form>
+  <div data-wallet-outcomes hidden></div>
+</section>
+
+<section class="action-strip" aria-labelledby="canary-safety-title">
+  <div><p class="eyebrow">SAFETY BOUNDARY</p><h2 id="canary-safety-title">This page never executes</h2></div>
+   <p>The sentinel is read-only (<code>noSigning/noBroadcast</code>). A FIRED verdict calls for review, not execution approval. Any live transaction requires a separately verified signed execution batch, a fresh gas quote, and the conservative <code>net &gt; 0</code> gate. Endpoint and key material never reaches this page.</p>
+</section>
+{% endblock %}

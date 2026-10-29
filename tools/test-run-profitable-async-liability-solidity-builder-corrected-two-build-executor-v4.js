@@ -1,0 +1,95 @@
+"use strict";
+
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const childProcess = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+const MODULE_PATH = path.join(__dirname, "run-profitable-async-liability-solidity-builder-corrected-two-build-executor-v4.js");
+const PREPARATION_PATH = path.join(__dirname, "vendor", "profitable-async-liability-solidity-builder-corrected-two-build-executor-v4", "authorization", "preparation-only.json");
+const FIXTURE_PATH = path.join(__dirname, "vendor", "profitable-async-liability-solidity-builder-image-inspect-diagnostic-v2", "fixtures", "image-inspect-match.json");
+const SOURCE = fs.readFileSync(MODULE_PATH, "utf8");
+const executor = require(MODULE_PATH);
+function preparation() { return JSON.parse(fs.readFileSync(PREPARATION_PATH, "utf8")); }
+function fixture() { return JSON.parse(fs.readFileSync(FIXTURE_PATH, "utf8"))[0]; }
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+function instrument(customRequire = require) {
+  const names = "runWorkflow, validateCreated, validateExited, productionDocker, writeDurableMarker, validateFixedPackageRoot, executeFixed";
+  const injected = SOURCE.replace(/^#!.*\n/, "").replace("module.exports = Object.freeze({", `module.exports = Object.freeze({ ${names},`);
+  const module = { exports: {} }; const wrapper = `(function(require,module,exports,__filename,__dirname){${injected}\n})`; new vm.Script(wrapper, { filename: MODULE_PATH }).runInThisContext()(customRequire, module, module.exports, MODULE_PATH, __dirname); return module.exports;
+}
+const internal = instrument();
+function result(status, stdout = "", stderr = "", error = null) { return { status, stdout, stderr, signal: null, error }; }
+function imageFixture() { const image = fixture(); delete image.Config.User; delete image.Config.Cmd; return image; }
+
+function created(spec, id, sourceDir) {
+  return { Id: id, Name: `/${spec.name}`, Image: "sha256:a411b47f58dbac78da4f2ea974e6bdbb4cd0598d6de7d8166903cdb34d6ecc9e",
+    Config: { Image: executor.futureScope().image.reference, Labels: spec.expectedLabels, Entrypoint: ["/emsdk/upstream/emscripten/emcc"], Cmd: executor.futureScope().recipe.argv, User: "65532:65532", WorkingDir: "/src", Env: [...executor.futureScope().environment.image, ...executor.futureScope().environment.explicit] },
+    State: { Status: "created", Running: false, StartedAt: "0001-01-01T00:00:00Z", FinishedAt: "0001-01-01T00:00:00Z", ExitCode: 0 },
+    HostConfig: { ReadonlyRootfs: true, NetworkMode: "none", CapDrop: ["ALL"], SecurityOpt: ["no-new-privileges:true"], Memory: 4294967296, MemorySwap: 4294967296, NanoCpus: 2000000000, PidsLimit: 256, IpcMode: "private", CgroupnsMode: "private", Privileged: false, Devices: [], PidMode: "", UTSMode: "", Tmpfs: { "/tmp": "rw,nosuid,nodev,size=268435456", "/home/nonroot": "rw,noexec,nosuid,nodev,size=33554432", "/cache": "rw,size=536870912" }, Mounts: [{ Type: "bind", Source: sourceDir, Target: "/src", ReadOnly: true }, { Type: "bind", Source: spec.outputDir, Target: "/out", ReadOnly: false }] },
+    Mounts: [{ Destination: "/src", RW: false }, { Destination: "/out", RW: true }] };
+}
+function exited(spec, id, sourceDir) { const value = created(spec, id, sourceDir); value.State = { Status: "exited", Running: false, ExitCode: 0, StartedAt: "2026-08-12T01:00:00Z", FinishedAt: "2026-08-12T01:00:01Z" }; return value; }
+
+function fakeWorkflow(options = {}) {
+  const authorizationId = options.authorizationId || "a".repeat(32); const plan = executor.buildPlan("<config>", "C:\\safe\\run", authorizationId); const ids = { a: "a".repeat(64), b: "b".repeat(64) }; const calls = []; const events = [];
+  const io = { config: "<config>", root: "C:\\safe\\run", journal(phase, operation, counters) { events.push({ phase, operation, counters: { ...counters } }); }, validateDaemon() {}, validatePaths(label, phase) { events.push({ path: `${label}:${phase}` }); }, validateSource() { events.push({ source: true }); }, validateEmpty(label) { events.push({ empty: label }); }, validateOutput(label) { if (options.outputFailure === label) throw new Error("OUTPUT_INVALID"); return { bytes: 508582, sha256: "07420813d7668445152a5d5d2017e0fb84cb27342257e1add3cc7462eec7f811" }; }, validateFinalPaths() { events.push({ finalPaths: true }); }, validatePublished() { return { bytes: 508582, sha256: "07420813d7668445152a5d5d2017e0fb84cb27342257e1add3cc7462eec7f811" }; },
+    docker(operation) {
+      calls.push(operation); if (operation === options.failAt) return result(2, "", "permission denied\n");
+      if (operation === "VERSION") return result(0, "{}"); if (operation === "INFO") return result(0, "{}"); if (operation === "IMAGE_INSPECT") return result(0, JSON.stringify(options.imageRows || [imageFixture()]));
+      if (operation.endsWith("ABSENCE_BEFORE")) { const spec = plan.builds[operation[0] === "A" ? 0 : 1]; return result(1, "", `Error: No such container: ${spec.name}\n`); }
+      if (operation.endsWith("CREATE")) { const label = operation[0].toLowerCase(); if (options.ambiguous === label) return result(null, "", "", { code: options.ambiguousCode || "ETIMEDOUT" }); return result(0, `${ids[label]}\n`); }
+      if (operation.endsWith("CREATED_INSPECT")) { const spec = plan.builds[operation[0] === "A" ? 0 : 1]; if (options.ambiguousAbsent === spec.label) return result(1, "", `Error: No such container: ${spec.name}\n`); return result(0, JSON.stringify([created(spec, ids[spec.label], plan.sourceDir)])); }
+      if (operation.endsWith("START_ATTACH")) return result(0); if (operation.endsWith("EXITED_INSPECT")) { const spec = plan.builds[operation[0] === "A" ? 0 : 1]; return result(0, JSON.stringify([exited(spec, ids[spec.label], plan.sourceDir)])); }
+      if (operation.endsWith("RM_FORCE")) return result(0); if (operation.endsWith("ABSENCE_AFTER")) { const spec = plan.builds[operation[0] === "A" ? 0 : 1]; return result(1, "", `Error: No such container: ${ids[spec.label]}\n`); } throw new Error(operation);
+    } };
+  try { return { value: internal.runWorkflow(io, authorizationId), error: null, calls, events, plan }; } catch (error) { return { value: null, error, calls, events, plan }; }
+}
+
+test("preparation-only provenance and status are exact", () => { const value = preparation(); executor.validatePreparationValue(value); assert.equal(value.userText, "please"); assert.equal(value.executionAuthorized, false); assert.equal(value.interpretation, "NO_CURRENT_EXECUTION_AUTHORIZATION_CLAIM"); });
+test("production has no exported workflow adapter or live hooks", () => { for (const key of ["runWorkflow", "executeFixed", "productionDocker", "main"]) assert.equal(Object.hasOwn(executor, key), false); assert.equal(typeof internal.runWorkflow, "function"); for (const bad of ["testHook", "internalOptions", "options = {}", "spawnSync:"]) assert.equal(SOURCE.includes(bad), false); });
+test("exact flag loads absent execution authorization before review and writes", () => { const main = SOURCE.slice(SOURCE.indexOf("function main(argv)"), SOURCE.indexOf("if (require.main")); const auth = main.indexOf("loadExecutionAuthorization"); const review = main.indexOf("loadReviewDecision"); const execute = main.indexOf("executeFixed"); assert.equal(auth >= 0 && auth < review && review < execute, true); const executeSection = SOURCE.slice(SOURCE.indexOf("function executeFixed"), SOURCE.indexOf("function runDefault")); assert.equal(executeSection.includes("stageAndConsume(bindings)"), true); });
+
+test("future scope is complete and exact", () => {
+  const scope = executor.futureScope(); assert.equal(scope.image.configDigest.length, 71); assert.equal(scope.image.diffIds.length, 5); assert.deepEqual(scope.calls.order, executor.OPERATION_ORDER); assert.equal(Object.values(scope.calls.distribution).reduce((a, b) => a + b, 0), 17); assert.equal(scope.recipe.argv.length, 18); assert.equal(scope.recipe.sourceRecords.length, 2); assert.equal(scope.environment.sourceDateEpochAbsent, true); assert.equal(scope.mounts.publishedWasmMounted, false); assert.equal(scope.output.bytes, 508582); assert.equal(scope.correction.fieldsCompared, 9); assert.equal(scope.correction.mismatches, 0); assert.equal(scope.correction.status, "IMAGE_INSPECT_DIAGNOSIS_MATCH"); assert.equal(scope.policy.parserPromotion, false); assert.equal(scope.timeouts.startAttachMs, 1800000);
+});
+
+test("future authorization binds full scope provenance command and hashes", () => {
+  const bindings = { preparation: preparation(), preparationSha256: "0".repeat(64), executorSha256: "1".repeat(64), testsSha256: "2".repeat(64), reportSha256: "3".repeat(64), packageManifestSha256: "4".repeat(64), executorAuthoritySha256: "5".repeat(64), executorDetachedChecksumSha256: "6".repeat(64) };
+  const value = { schema: `${executor.NAMESPACE}/execution-authorization-v1`, status: "EXPLICIT_CURRENT_TURN_EXECUTION_AUTHORIZATION", authorizationId: "a".repeat(32), authorizedAtUtc: "2026-08-12T12:00:00Z", exactUserText: "I explicitly authorize this exact execution", exactExecutionCommand: `node tools/run-profitable-async-liability-solidity-builder-corrected-two-build-executor-v4.js ${executor.EXECUTE_FLAG}`, preparation: { preparationId: bindings.preparation.preparationId, preparationSha256: bindings.preparationSha256 }, scope: executor.futureScope(), bindings: { executorSha256: bindings.executorSha256, testsSha256: bindings.testsSha256, reportSha256: bindings.reportSha256, packageManifestSha256: bindings.packageManifestSha256, executorAuthoritySha256: bindings.executorAuthoritySha256, executorDetachedChecksumSha256: bindings.executorDetachedChecksumSha256 }, oneShot: { consumeBeforeFirstDockerCall: true, consumedOnAnyOutcome: true, noRetry: true }, terminalPolicy: { outputsQuarantined: true, successRequiresTwoRemovalsAndAbsence: true, forbidden: executor.futureScope().policy.forbidden } };
+  executor.validateExecutionAuthorizationValue(value, bindings); for (const mutate of [(x) => { x.authorizedAtUtc = "bad"; }, (x) => { x.exactUserText = ""; }, (x) => { x.exactExecutionCommand = "other"; }, (x) => { x.scope.calls.hardMaximumAllPaths = 18; }, (x) => { x.preparation.preparationId = "b".repeat(32); }, (x) => { x.oneShot.noRetry = false; }]) { const bad = clone(value); mutate(bad); assert.throws(() => executor.validateExecutionAuthorizationValue(bad, bindings)); }
+});
+
+test("image inspect exact singleton and correction MATCH result enforced", () => { const image = imageFixture(); const match = executor.validateImageInspect(image, "a".repeat(32)); assert.equal(match.status, "IMAGE_INSPECT_DIAGNOSIS_MATCH"); for (const rows of [[], [image, image], [{}]]) { const run = fakeWorkflow({ imageRows: rows }); assert.notEqual(run.error, null); assert.equal(run.calls.includes("A_CREATE"), false); } });
+test("image inspect mismatches cannot be ignored", () => { const image = imageFixture(); image.Os = "windows"; assert.throws(() => executor.validateImageInspect(image, "a".repeat(32)), /IMAGE_INSPECT_INVALID/); const run = fakeWorkflow({ imageRows: [image] }); assert.notEqual(run.error, null); assert.equal(run.calls.length, 3); });
+
+test("normal production workflow simulation uses exact 17 calls sequentially", () => { const run = fakeWorkflow(); assert.equal(run.error, null); assert.deepEqual(run.calls, executor.OPERATION_ORDER); assert.equal(run.calls.indexOf("A_ABSENCE_AFTER") < run.calls.indexOf("B_ABSENCE_BEFORE"), true); assert.equal(run.value.counters.daemonObservedStarts, 2); assert.equal(run.value.counters.verifiedBuilds, 2); });
+test("known-ID created inspect failure runs one finally cleanup", () => { const run = fakeWorkflow({ failAt: "A_CREATED_INSPECT" }); assert.notEqual(run.error, null); assert.deepEqual(run.calls.slice(-2), ["A_RM_FORCE", "A_ABSENCE_AFTER"]); assert.equal(run.calls.filter((x) => x === "A_RM_FORCE").length, 1); assert.equal(run.calls.some((x) => x.startsWith("B_")), false); });
+test("known-ID start failure runs one finally cleanup", () => { const run = fakeWorkflow({ failAt: "A_START_ATTACH" }); assert.deepEqual(run.calls.slice(-2), ["A_RM_FORCE", "A_ABSENCE_AFTER"]); assert.equal(run.calls.length <= 17, true); });
+test("known-ID exit inspect failure runs one finally cleanup", () => { const run = fakeWorkflow({ failAt: "A_EXITED_INSPECT" }); assert.deepEqual(run.calls.slice(-2), ["A_RM_FORCE", "A_ABSENCE_AFTER"]); });
+test("known-ID output failure runs one finally cleanup", () => { const run = fakeWorkflow({ outputFailure: "a" }); assert.deepEqual(run.calls.slice(-2), ["A_RM_FORCE", "A_ABSENCE_AFTER"]); assert.equal(run.calls.some((x) => x.startsWith("B_")), false); });
+
+test("ambiguous daemon-created branch inspects name cleans ID never starts", () => { for (const code of ["ETIMEDOUT", "ENOBUFS"]) { const run = fakeWorkflow({ ambiguous: "a", ambiguousCode: code }); assert.notEqual(run.error, null); assert.deepEqual(run.calls, ["VERSION", "INFO", "IMAGE_INSPECT", "A_ABSENCE_BEFORE", "A_CREATE", "A_CREATED_INSPECT", "A_RM_FORCE", "A_ABSENCE_AFTER"]); assert.equal(run.calls.includes("A_START_ATTACH"), false); assert.equal(run.calls.length <= 17, true); } });
+test("ambiguous exact-absence branch uses reserved slot and no cleanup", () => { const run = fakeWorkflow({ ambiguous: "a", ambiguousAbsent: "a" }); assert.notEqual(run.error, null); assert.deepEqual(run.calls, ["VERSION", "INFO", "IMAGE_INSPECT", "A_ABSENCE_BEFORE", "A_CREATE", "A_CREATED_INSPECT"]); });
+test("every injected operation failure remains capped and unique", () => { for (const operation of executor.OPERATION_ORDER) { const run = fakeWorkflow({ failAt: operation }); assert.notEqual(run.error, null, operation); assert.equal(run.calls.length <= 17, true, operation); assert.equal(new Set(run.calls).size, run.calls.length, operation); } });
+
+test("full created-container validation rejects every restored class", () => {
+  const plan = executor.buildPlan("<c>", "C:\\safe\\run", "a".repeat(32)); const spec = plan.builds[0]; const id = "a".repeat(64); const good = created(spec, id, plan.sourceDir); internal.validateCreated(good, spec, id, plan.sourceDir);
+  const mutations = [(x) => { x.Config.Image = "bad"; }, (x) => { x.Id = "b".repeat(64); }, (x) => { x.Name = "/wrong"; }, (x) => { x.Config.Labels["pal.build"] = "b"; }, (x) => { x.Config.Entrypoint = []; }, (x) => { x.Config.Cmd = []; }, (x) => { x.Config.User = "root"; }, (x) => { x.Config.WorkingDir = "/"; }, (x) => { x.Config.Env.push("SOURCE_DATE_EPOCH=1"); }, (x) => { x.HostConfig.ReadonlyRootfs = false; }, (x) => { x.HostConfig.NetworkMode = "bridge"; }, (x) => { x.HostConfig.CapDrop = []; }, (x) => { x.HostConfig.SecurityOpt = []; }, (x) => { x.HostConfig.Memory = 1; }, (x) => { x.HostConfig.MemorySwap = 1; }, (x) => { x.HostConfig.NanoCpus = 1; }, (x) => { x.HostConfig.PidsLimit = 1; }, (x) => { x.HostConfig.IpcMode = "host"; }, (x) => { x.HostConfig.CgroupnsMode = "host"; }, (x) => { x.HostConfig.Privileged = true; }, (x) => { x.HostConfig.Devices = [{}]; }, (x) => { x.HostConfig.PidMode = "host"; }, (x) => { x.HostConfig.UTSMode = "host"; }, (x) => { x.HostConfig.Tmpfs = {}; }, (x) => { x.HostConfig.Mounts[0].ReadOnly = false; }, (x) => { x.Mounts[0].RW = true; }, (x) => { x.State.Status = "running"; }, (x) => { x.State.StartedAt = "now"; }];
+  for (const mutate of mutations) { const value = clone(good); mutate(value); assert.throws(() => internal.validateCreated(value, spec, id, plan.sourceDir), /CREATED_CONFIG_INVALID/); }
+});
+
+test("production Docker adapter sets exact controls and post-checks success output", () => {
+  const observed = []; const fakeChild = { spawnSync(command, argv, options) { observed.push({ command, argv, options }); return result(0, "x", "y"); } }; const custom = (id) => id === "node:child_process" ? fakeChild : require(id); const adapted = instrument(custom); const call = adapted.productionDocker({ SAFE: "1" }); const value = call("VERSION", ["version"], 30000); assert.equal(value.status, 0); assert.deepEqual(observed[0], { command: "docker", argv: ["version"], options: { shell: false, windowsHide: true, encoding: "utf8", env: { SAFE: "1" }, timeout: 30000, maxBuffer: 2097152 } });
+  fakeChild.spawnSync = () => result(0, "x".repeat(2097153), ""); const limited = call("VERSION", [], 30000); assert.equal(limited.error.code, "ENOBUFS");
+});
+
+test("production source includes staging path journal marker and terminal adapters", () => { for (const text of ["stageAndConsume", "assertPathSafe", "lstatSync", "realpathSync", "openJournal", "fsyncSync", "writeDurableMarker", "authorization-consumed.json", "success.json", "failure.json", "terminalEvidenceState"]) assert.equal(SOURCE.includes(text), true, text); });
+test("fixed auth review final roots are fully checked before reads", () => { const validate = SOURCE.slice(SOURCE.indexOf("function validateFixedPackageRoot"), SOURCE.indexOf("function writeExclusiveFsync")); assert.equal(validate.includes("assertPathSafe(root, WORKSPACE"), true); assert.equal(validate.includes("for (const file of files) assertPathSafe(file, root"), true); for (const loader of ["loadExecutionAuthorization", "loadReviewDecision", "loadFinalAuthority"]) { const at = SOURCE.indexOf(`function ${loader}`); const section = SOURCE.slice(at, SOURCE.indexOf("function ", at + 10)); assert.equal(section.indexOf("validateFixedPackageRoot") < section.indexOf("readJson"), true, loader); } });
+test("marker target and temp must be absent and final readback precedes directory fsync", () => { const section = SOURCE.slice(SOURCE.indexOf("function writeDurableMarker"), SOURCE.indexOf("function sanitizedDockerEnv")); assert.equal((section.match(/assert\.equal\(fs\.existsSync/g) || []).length, 3); assert.equal(section.indexOf("fs.renameSync") < section.indexOf("fs.readFileSync(target"), true); assert.equal(section.indexOf("fs.readFileSync(target") < section.indexOf("fsyncDirectory"), true); });
+test("production CLI reports accurate post-consumption counters/state", () => { const cli = SOURCE.slice(SOURCE.indexOf("if (require.main"), SOURCE.indexOf("module.exports")); assert.match(cli, /error && error\.counters/); assert.match(cli, /terminalEvidenceState/); assert.equal(cli.includes("writes: 0"), false); });
+test("pure base APIs make zero process calls and writes", () => { const spawn = childProcess.spawnSync; const write = fs.writeSync; let calls = 0; let writes = 0; childProcess.spawnSync = () => { calls += 1; }; fs.writeSync = () => { writes += 1; }; try { executor.futureScope(); executor.buildPlan(); executor.validatePreparationValue(preparation()); assert.equal(calls, 0); assert.equal(writes, 0); } finally { childProcess.spawnSync = spawn; fs.writeSync = write; } });
+test("preparation status sealed and current authority absent", () => { assert.equal(SOURCE.includes("SEALED_PREPARATION_ONLY_REVIEW_REQUIRED_EXECUTION_UNAUTHORIZED"), true); assert.equal(SOURCE.includes("executionAuthorized: false"), true); assert.equal(SOURCE.includes("EXPLICIT_EXECUTION_AUTHORIZATION_REQUIRED"), true); });

@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Jobs · Watchboard{% endblock %}
+{% block body_class %}jobs-shell{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='deployed-contracts.css') }}">
+<script src="{{ url_for('static', filename='deployed-contracts.js') }}" defer></script>
+{% endblock %}
+{% macro timestamp(value) -%}
+  {% if value %}<time datetime="{{ value }}">{{ value|replace('T', ' ') }}</time>{% else %}<span class="jobs-secondary">Not reported</span>{% endif %}
+{%- endmacro %}
+{% macro cadence(seconds) -%}
+  {% if seconds is none or seconds <= 0 %}Not reported
+  {% elif seconds % 86400 == 0 %}Every {{ seconds // 86400 }} day{% if seconds != 86400 %}s{% endif %}
+  {% elif seconds % 3600 == 0 %}Every {{ seconds // 3600 }} hour{% if seconds != 3600 %}s{% endif %}
+  {% elif seconds % 60 == 0 %}Every {{ seconds // 60 }} minute{% if seconds != 60 %}s{% endif %}
+  {% else %}Every {{ seconds }} seconds{% endif %}
+{%- endmacro %}
+{% block content %}
+{% set fresh = jobs.freshness == 'FRESH' %}
+{% set process_ok = fresh and jobs.inspection.processes == 'OK' %}
+{% set scheduler_ok = fresh and jobs.inspection.scheduler == 'OK' %}
+{% set counts = namespace(running=0, ready=0, disabled=0) %}
+{% for job in jobs.jobs %}
+  {% if process_ok and job.process.state == 'RUNNING' %}{% set counts.running = counts.running + 1 %}{% endif %}
+  {% if scheduler_ok and job.schedule %}
+    {% if job.schedule.state == 'READY' %}{% set counts.ready = counts.ready + 1 %}{% endif %}
+    {% if job.schedule.state == 'DISABLED' %}{% set counts.disabled = counts.disabled + 1 %}{% endif %}
+  {% endif %}
+{% endfor %}
+<div class="jobs-page">
+  <section class="hero compact jobs-hero" aria-labelledby="jobs-title">
+    <p class="eyebrow">LOCAL JOBS / RECORDED DEPLOYMENTS</p>
+    <h1 id="jobs-title">Jobs</h1>
+    <p class="lede">Audit monitors, scheduled collectors, and our recorded contract deployments in one read-only view.</p>
+    <p class="jobs-refresh"><span data-refresh-status aria-live="polite">Automatic refresh every 60 seconds.</span> <span>60-second refresh · pauses in hidden tabs.</span></p>
+  </section>
+
+  <nav class="jobs-section-nav" aria-label="On this page">
+    <a href="#jobs-register"><span class="jobs-section-number" aria-hidden="true">01</span><span>Process &amp; schedule register</span><span aria-hidden="true">↓</span></a>
+    <a href="#deployed-contracts"><span class="jobs-section-number" aria-hidden="true">02</span><span>Deployed contracts</span><span aria-hidden="true">↓</span></a>
+  </nav>
+
+  <section class="jobs-observation{% if not fresh %} jobs-observation-warning{% endif %}" aria-label="Observation quality">
+    <div><span class="jobs-badge {% if fresh %}jobs-good{% else %}jobs-warning{% endif %}">{{ jobs.freshness }}</span><strong>Observed {{ timestamp(jobs.observedAt) }}</strong></div>
+    <p>{% if jobs.freshness == 'STALE' %}This snapshot is stale. Current process and scheduler states are unknown; PIDs are withheld.
+    {% elif not fresh %}Current observations are unavailable. Missing evidence does not mean a job is stopped.
+    {% else %}A running process and an enabled schedule are separate observations, not proof of authorization or readiness.{% endif %}</p>
+    <dl class="jobs-inspection">
+      <div><dt>Process inspection</dt><dd>{{ jobs.inspection.processes }}{% if jobs.inspection.processes != 'OK' %} · current processes unknown{% endif %}</dd></div>
+      <div><dt>Scheduler inspection</dt><dd>{{ jobs.inspection.scheduler }}{% if jobs.inspection.scheduler != 'OK' %} · current schedules unknown{% endif %}</dd></div>
+    </dl>
+    {% if jobs.inspection.processes == 'UNSUPPORTED' or jobs.inspection.scheduler == 'UNSUPPORTED' %}<p>Some inspection is not supported on this host. Those states remain unknown.</p>{% endif %}
+    {% if jobs.inspection.processes == 'ERROR' or jobs.inspection.scheduler == 'ERROR' %}<p>Inspection failed for the source marked ERROR. Other available observations are shown separately.</p>{% endif %}
+  </section>
+
+  <dl class="jobs-summary" aria-label="Job snapshot summary">
+    <div><dt>Jobs tracked</dt><dd>{{ jobs.jobs|length }}</dd></div>
+    <div><dt>Running jobs</dt><dd>{% if process_ok %}{{ counts.running }}{% else %}Unknown{% endif %}</dd></div>
+    <div><dt>Ready schedules</dt><dd>{% if scheduler_ok %}{{ counts.ready }}{% else %}Unknown{% endif %}</dd></div>
+    <div><dt>Disabled schedules</dt><dd>{% if scheduler_ok %}{{ counts.disabled }}{% else %}Unknown{% endif %}</dd></div>
+  </dl>
+
+  <section class="jobs-register" id="jobs-register" aria-labelledby="jobs-register-title">
+    <div class="jobs-register-heading"><h2 id="jobs-register-title">Job register</h2><a href="/api/v1/jobs">View JSON</a></div>
+    <p id="jobs-table-help" class="jobs-secondary">Ready means an idle schedule, not a stopped process. A disabled schedule can still have a running PID. Scroll across for run times and window details.</p>
+    {% if jobs.jobs %}
+    <div class="jobs-table-scroll" role="region" aria-label="Job observations, horizontally scrollable" aria-describedby="jobs-table-help" tabindex="0">
+      <table class="jobs-table">
+        <caption>Process and scheduler states at the observation time. Times include the reported time zone.</caption>
+        <thead><tr><th scope="col">Job / purpose</th><th scope="col">Process</th><th scope="col">PID(s)</th><th scope="col">Scheduler</th><th scope="col">Cadence</th><th scope="col">Last / next run</th><th scope="col">Last result</th><th scope="col">Window</th></tr></thead>
+        <tbody>{% for job in jobs.jobs %}
+          <tr>
+            <th scope="row" id="job-{{ job.id }}"><span class="jobs-kind">{{ job.kind|replace('_', ' ') }}</span><strong>{{ job.label }}</strong><p>{{ job.description }}</p><code>{{ job.scriptId }}</code></th>
+            <td>
+              {% if not process_ok %}<span class="jobs-badge jobs-warning">Unknown</span><small>{% if not fresh %}No fresh observation{% else %}Inspection {{ jobs.inspection.processes|lower }}{% endif %}</small>
+              {% elif job.process.state == 'RUNNING' %}<span class="jobs-badge jobs-good">Running</span><small>{{ job.process.instanceCount }} instance{% if job.process.instanceCount != 1 %}s{% endif %}</small>
+              {% elif job.process.state == 'NOT_RUNNING' %}<span class="jobs-badge jobs-neutral">Not running</span>
+              {% else %}<span class="jobs-badge jobs-warning">Unknown</span><small>Not confirmed stopped</small>{% endif %}
+              {% if process_ok and job.process.matchKind == 'SCRIPT_MATCH' %}<small class="jobs-caution">Lower-confidence script match; workspace not confirmed.</small>{% endif %}
+              {% if process_ok and job.process.state == 'RUNNING' and job.process.startedAt %}<small>Started {{ timestamp(job.process.startedAt) }}</small>{% endif %}
+            </td>
+            <td class="jobs-pids">{% if process_ok and job.process.state == 'RUNNING' %}{% if job.process.pids %}{{ job.process.pids|join(', ') }}{% elif job.process.pid is not none %}{{ job.process.pid }}{% else %}<span class="jobs-secondary">Not reported</span>{% endif %}{% else %}<span class="jobs-secondary">—</span><small>{% if not process_ok %}Not verified{% else %}No confirmed live PID{% endif %}</small>{% endif %}</td>
+            <td>
+              {% if not job.schedule %}<span class="jobs-secondary">Not scheduled</span>
+              {% elif not scheduler_ok %}<span class="jobs-badge jobs-warning">Unknown</span><small>{% if not fresh %}No fresh observation{% else %}Inspection {{ jobs.inspection.scheduler|lower }}{% endif %}</small>
+              {% else %}
+                {% set state = job.schedule.state %}
+                <span class="jobs-badge {% if state == 'RUNNING' %}jobs-good{% elif state in ['UNKNOWN', 'MISSING'] %}jobs-warning{% elif state in ['READY', 'QUEUED'] %}jobs-info{% else %}jobs-neutral{% endif %}">{{ state|capitalize }}</span>
+                {% if state == 'READY' %}<small>Idle schedule</small>{% elif state == 'DISABLED' %}<small>Automatic launch disabled</small>{% elif state == 'MISSING' %}<small>Task not found</small>{% endif %}
+                <small>Enabled: {% if job.schedule.enabled is sameas true %}Yes{% elif job.schedule.enabled is sameas false %}No{% else %}Unknown{% endif %}</small>
+              {% endif %}
+              {% if job.schedule %}<code>{{ job.schedule.taskId }}</code>{% endif %}
+            </td>
+            <td>{% if job.schedule %}{{ cadence(job.schedule.cadenceSeconds) }}{% if not scheduler_ok %}<small>Unverified schedule metadata</small>{% endif %}{% else %}<span class="jobs-secondary">Not scheduled</span>{% endif %}</td>
+            <td>{% if job.schedule %}<span class="jobs-field">Last</span>{{ timestamp(job.schedule.lastRunAt) }}<span class="jobs-field">Next{% if job.schedule.state == 'DISABLED' %} (disabled){% endif %}</span>{{ timestamp(job.schedule.nextRunAt) }}{% if not scheduler_ok %}<small>Historical / unverified</small>{% elif job.schedule.state == 'DISABLED' %}<small>No automatic launch expected</small>{% endif %}{% else %}<span class="jobs-secondary">Not applicable</span>{% endif %}</td>
+            <td>{% if job.schedule and job.schedule.lastResultCode is not none %}<span class="jobs-field">Scheduler code</span><code>{{ job.schedule.lastResultCode }}</code><small>Not a job health verdict</small>{% if not scheduler_ok %}<small>Historical / unverified</small>{% endif %}{% else %}<span class="jobs-secondary">Not reported</span>{% endif %}</td>
+            <td><span class="jobs-field">Observed</span>{% if process_ok and job.process.state == 'RUNNING' and job.process.windowVisible is sameas true %}Visible{% elif process_ok and job.process.state == 'RUNNING' and job.process.windowVisible is sameas false %}Hidden{% else %}<span class="jobs-secondary">Unknown</span>{% endif %}{% if job.schedule %}<span class="jobs-field">Scheduled launch</span>{% if job.schedule.hiddenLaunch is sameas true %}Hidden{% elif job.schedule.hiddenLaunch is sameas false %}Visible{% else %}<span class="jobs-secondary">Unknown</span>{% endif %}{% if not scheduler_ok %}<small>Unverified metadata</small>{% endif %}{% endif %}</td>
+          </tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="jobs-empty"><h3>No jobs to display</h3><p>{% if fresh and jobs.inspection.processes == 'OK' %}This snapshot contains no registered jobs. It does not establish that no other processes exist.{% else %}The job inventory is unavailable or empty. Process and schedule activity cannot be inferred from this view.{% endif %}</p></div>
+    {% endif %}
+    <p class="jobs-footnote">Read-only observations only. No start, stop, launch, or trading controls. Window visibility does not establish process health.</p>
+  </section>
+  {% include '_deployed_contracts.html' %}
+</div>
+{% endblock %}

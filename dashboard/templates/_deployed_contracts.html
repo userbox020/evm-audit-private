@@ -1,0 +1,125 @@
+{% set contract_view = deployed|default({}, true) %}
+{% set contract_counts = contract_view.summary|default({}, true) %}
+{% set contract_filters = contract_view.filters|default({}, true) %}
+{% set contract_options = contract_view.options|default({}, true) %}
+{% set contracts = contract_view.contracts|default([], true) %}
+{% set coverage = contract_view.coverage|default({}, true) %}
+{% macro contract_value(value, fallback='Not recorded') -%}
+  {{ value if value is defined and value is not none and value != '' else fallback }}
+{%- endmacro %}
+<section class="dc" id="deployed-contracts" aria-labelledby="deployed-contracts-title" data-deployed-contracts>
+  <header class="dc-heading">
+    <div><p class="dc-eyebrow">02 / OUR RECORDED DEPLOYMENTS</p><h2 id="deployed-contracts-title">Deployed contracts</h2><p class="dc-intro">Executors and other workspace-deployed contracts, one record per chain and address.</p></div>
+    <div class="dc-date"><span>Catalog as of</span>{% if contract_view.catalog_as_of %}<time datetime="{{ contract_view.catalog_as_of }}">{{ contract_view.catalog_as_of }}</time>{% else %}<strong>Not recorded</strong>{% endif %}<span>Not a live chain check</span></div>
+  </header>
+  <aside class="dc-boundary" aria-label="Deployment evidence limits"><strong>Recorded deployment ≠ execution readiness.</strong><span>Historical receipts and deployment records do not verify current code, ownership, funding, or authorization. Runner observations are shown separately. This page performs no live chain check.</span></aside>
+
+  <dl class="dc-counts" aria-label="Global deployment counts">
+    {% for key, label in [('total', 'Recorded deployments'), ('receipt_backed', 'Receipt recorded'), ('recorded_only', 'Deployment record only'), ('executors', 'Executors'), ('other_contracts', 'Other contracts'), ('chains', 'Chains')] %}
+    <div{% if key == 'total' %} class="dc-total"{% endif %}><dt>{{ label }}</dt><dd>{{ contract_value(contract_counts[key], 'Unknown') }}</dd></div>
+    {% endfor %}
+  </dl>
+  <p class="dc-help">Global counts · unaffected by filters. Other contracts includes helpers. Fork-only, staged-only, and third-party contracts are not counted as our deployments.</p>
+
+  {% if contract_view %}
+  <form class="dc-filters" action="/jobs#deployed-contracts" method="get" aria-label="Filter deployed contracts" aria-describedby="contract-filter-help">
+    <label class="dc-search" for="contract-q">Search contracts<input id="contract-q" type="search" name="contract_q" value="{{ contract_filters.contract_q or '' }}" maxlength="200" placeholder="Name, address, purpose, or source…" autocomplete="off" aria-controls="contract-list"></label>
+    {% for name, label, all_label, collection in [('contract_chain', 'Chain', 'All chains', contract_options.chains), ('contract_kind', 'Contract kind', 'All kinds', contract_options.kinds), ('contract_evidence', 'Deployment evidence', 'All evidence', contract_options.evidence)] %}
+    {% set choices = collection|default([], true) %}
+    {% set selected = contract_filters[name]|default('', true)|string %}
+    <label for="{{ name }}">{{ label }}<select id="{{ name }}" name="{{ name }}" aria-controls="contract-list">
+      <option value="">{{ all_label }}</option>
+      {% if selected and selected not in choices|map(attribute='value')|map('string')|list %}<option value="{{ selected }}" selected>Unrecognized: {{ selected }}</option>{% endif %}
+      {% for option in choices %}<option value="{{ option.value }}"{% if selected == option.value|string %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
+    </select></label>
+    {% endfor %}
+    <div class="dc-filter-actions"><button type="submit">Apply filters</button><a href="/jobs#deployed-contracts">Clear</a></div>
+  </form>
+  <p class="dc-help" id="contract-filter-help">Filters search the full recorded catalog, not the job register. Unrecognized filters return no matches. Pause refresh in the header while reviewing if needed.</p>
+  <div class="dc-results">
+    <p role="status"><strong>{{ contract_value(contract_counts.matched, 'Unknown') }}</strong> matching / {{ contract_value(contract_counts.total, 'unknown') }} recorded deployments</p>
+    <div class="dc-tools"><a class="dc-json" href="{{ url_for('deployed_contracts_api', contract_q=contract_filters.contract_q or '', contract_chain=contract_filters.contract_chain or '', contract_kind=contract_filters.contract_kind or '', contract_evidence=contract_filters.contract_evidence or '') }}">Filtered JSON <span aria-hidden="true">↗</span></a><div class="dc-detail-actions" data-contract-detail-actions hidden><button type="button" data-contract-expand aria-controls="contract-list">Expand shown</button><button type="button" data-contract-collapse aria-controls="contract-list">Collapse shown</button></div></div>
+  </div>
+  <noscript><p class="dc-help">Filters and expandable contract details work without JavaScript.</p></noscript>
+  {% endif %}
+
+  {% if contracts %}<div class="dc-list-heading" aria-hidden="true"><span>Contract / address</span><span>Chain</span><span>Deployment evidence</span><span>Execution readiness</span><span></span></div>{% endif %}
+  <ul class="dc-list" id="contract-list">
+    {% for contract in contracts %}
+    {% set record_id = 'contract-' ~ contract.id %}
+    {% set deployment = contract.deployment|default({}, true) %}
+    {% set ownership = contract.ownership|default({}, true) %}
+    {% set code = contract.code|default({}, true) %}
+    {% set readiness = contract.readiness|default({}, true) %}
+    {% set evidence_state = deployment.status if deployment.status in ['receipt_backed', 'recorded_only'] else 'unknown' %}
+    {% set ready_state = readiness.state if readiness.state in ['held', 'disabled', 'unknown'] else 'unknown' %}
+    <li><details class="dc-contract" id="{{ record_id }}" data-contract-record>
+      <summary>
+        <span class="dc-identity"><span class="dc-kind">{{ contract_value(contract.kind_label, 'Other contract') }}</span><strong>{{ contract_value(contract.name, 'Unnamed contract') }}</strong><code class="dc-address">{{ contract_value(contract.address, 'Address not recorded') }}</code></span>
+        <span class="dc-cell"><span class="dc-mobile-label">Chain</span><span>{{ contract_value(contract.chain_name, 'Unknown') }}</span><small>Chain ID {{ contract_value(contract.chain_id, 'unknown') }}</small></span>
+        <span class="dc-cell"><span class="dc-mobile-label">Deployment evidence</span><span class="dc-badge dc-evidence-{{ evidence_state }}">{% if evidence_state == 'receipt_backed' %}Receipt recorded{% elif evidence_state == 'recorded_only' %}Deployment record only{% else %}Unknown{% endif %}</span></span>
+        <span class="dc-cell dc-readiness-cell"><span class="dc-mobile-label">Execution readiness</span><span class="dc-badge dc-readiness-{{ ready_state }}">{{ ready_state|capitalize }}</span><small>{{ contract.runners|default([], true)|length }} runner mapping{{ '' if contract.runners|default([], true)|length == 1 else 's' }}</small></span>
+        <span class="dc-chevron" aria-hidden="true">+</span><span class="dc-sr">Details, evidence, and runner observations</span>
+      </summary>
+      <div class="dc-body">
+        <div class="dc-record-links"><span>Recorded identity · not a current chain observation</span><a href="#{{ record_id|urlencode }}">Link to this contract <span aria-hidden="true">#</span></a></div>
+        <div class="dc-detail-grid">
+          <section><h3>Purpose &amp; capabilities</h3>
+            <p>{{ contract_value(contract.purpose) }}</p>
+            <dl class="dc-facts"><div><dt>Contract address</dt><dd><code class="dc-address">{{ contract_value(contract.address) }}</code>{% if contract.explorer_url %}<a class="dc-explorer" href="{{ contract.explorer_url }}" target="_blank" rel="noopener noreferrer">View address on explorer <span aria-hidden="true">↗</span><span class="dc-sr"> (opens a new tab)</span></a>{% endif %}</dd></div>
+              <div><dt>Protocols</dt><dd>{% if contract.protocols %}{{ contract.protocols|join(' · ') }}{% else %}Not recorded{% endif %}</dd></div>
+              <div><dt>Funding model · not a live balance</dt><dd>{{ contract_value(contract.funding) }}</dd></div>
+              {% if contract.aliases %}<div><dt>Also recorded as</dt><dd>{{ contract.aliases|join(' · ') }}</dd></div>{% endif %}
+            </dl>
+            <h4>Recorded capabilities</h4><ul class="dc-notes">{% for capability in contract.capabilities|default([], true) %}<li>{{ capability }}</li>{% else %}<li>Not recorded.</li>{% endfor %}</ul>
+          </section>
+          <section><h3>Deployment evidence</h3>
+            <p>{{ contract_value(deployment.label, 'Evidence classification not recorded.') }}</p>
+            <dl class="dc-facts"><div><dt>Transaction</dt><dd>{% if deployment.tx_hash %}<code>{{ deployment.tx_hash }}</code>{% if deployment.tx_url %}<a class="dc-explorer" href="{{ deployment.tx_url }}" target="_blank" rel="noopener noreferrer">View transaction on explorer <span aria-hidden="true">↗</span><span class="dc-sr"> (opens a new tab)</span></a>{% endif %}{% else %}Not recorded{% endif %}</dd></div>
+              <div><dt>Recorded block</dt><dd>{{ contract_value(deployment.block_number, 'Unknown') }}</dd></div>
+              <div><dt>Evidence observation time</dt><dd>{% if deployment.observed_at %}<time datetime="{{ deployment.observed_at }}">{{ deployment.observed_at|replace('T', ' ') }}</time>{% else %}Not recorded{% endif %}</dd></div>
+              <div><dt>Deployment gas used</dt><dd>{{ contract_value(deployment.gas_used, 'Unknown') }}</dd></div>
+            </dl><p class="dc-help">{{ contract_value(deployment.note, 'Historical deployment evidence only; no fresh receipt check.') }}</p>
+          </section>
+          <section><h3>Ownership &amp; code evidence</h3><p class="dc-meta">Recorded metadata, not a fresh ownership or bytecode check.</p>
+            <dl class="dc-facts"><div><dt>Recorded owner</dt><dd>{% if ownership.owner_address %}<code>{{ ownership.owner_address }}</code>{% else %}Unknown{% endif %}</dd></div>
+              <div><dt>Access controls</dt><dd>{{ contract_value(ownership.access, 'Unknown') }}</dd></div>
+              <div><dt>Upgradeability</dt><dd>{{ contract_value(ownership.upgradeability, 'Unknown') }}</dd></div>
+              <div><dt>Recorded runtime hash</dt><dd>{% if code.runtime_hash %}<code>{{ code.runtime_hash }}</code>{% else %}Unknown{% endif %}</dd></div>
+              <div><dt>Code verification evidence</dt><dd>{{ contract_value(code.verification, 'Unknown') }}</dd></div>
+              <div><dt>Compiler</dt><dd>{{ contract_value(code.compiler, 'Unknown') }}</dd></div>
+            </dl>
+          </section>
+          <section><h3>Execution readiness &amp; limits</h3>
+            <div class="dc-readiness-note"><span class="dc-badge dc-readiness-{{ ready_state }}">{{ ready_state|capitalize }}</span><p>{{ contract_value(readiness.label, 'Readiness not established') }}</p><p>{{ contract_value(readiness.note, 'Deployment evidence alone does not establish permission or ability to execute.') }}</p></div>
+            <h4>Blockers &amp; caveats</h4><ul class="dc-notes">{% for blocker in contract.blockers|default([], true) %}<li>{{ blocker }}</li>{% else %}<li>No specific blocker recorded. This does not establish readiness.</li>{% endfor %}</ul>
+          </section>
+          <section class="dc-wide"><h3>Mapped runner observations</h3><p class="dc-meta">Local process observations only. A running runner is not proof this contract is active, funded, or authorized.</p>
+            <ul class="dc-runners">{% for runner in contract.runners|default([], true) %}
+              <li><div class="dc-runner-heading"><strong>{% if runner.url %}<a href="{{ runner.url }}">{{ contract_value(runner.label, 'Runner') }} <span aria-hidden="true">↑</span></a>{% else %}{{ contract_value(runner.label, 'Runner') }}{% endif %}</strong><span class="dc-badge dc-runner-state">{% if runner.state == 'UNMAPPED' %}Unmapped{% elif not process_ok %}Unknown{% elif runner.state == 'RUNNING' %}Running{% elif runner.state == 'NOT_RUNNING' %}Not running{% else %}Unknown{% endif %}</span></div>
+                <code>{{ contract_value(runner.script_id) }}</code>
+                <dl class="dc-runner-facts"><div><dt>Observed</dt><dd>{% if runner.observed_at %}<time datetime="{{ runner.observed_at }}">{{ runner.observed_at|replace('T', ' ') }}</time>{% else %}Not reported{% endif %}</dd></div><div><dt>PID(s)</dt><dd>{% if process_ok and runner.state == 'RUNNING' and runner.pids %}{{ runner.pids|join(', ') }}{% else %}Not confirmed{% endif %}</dd></div></dl>
+                {% if runner.match_kind == 'SCRIPT_MATCH' %}<p class="dc-caution">Lower-confidence script match; workspace not confirmed.</p>{% endif %}
+                {% if runner.state == 'UNMAPPED' %}<p class="dc-meta">Not in the job register; this does not mean stopped.</p>{% elif not process_ok %}<p class="dc-meta">No fresh, successful process inspection. Current state and PIDs are withheld.</p>{% endif %}
+                {% if runner.note %}<p class="dc-meta">{{ runner.note }}</p>{% endif %}
+              </li>
+            {% else %}<li>No runner mapping recorded. This does not mean the contract is unused or disabled.</li>{% endfor %}</ul>
+          </section>
+          <section><h3>Source locations</h3><p class="dc-meta">Plain workspace references, not file links.</p><ul class="dc-sources">{% for source in contract.source_paths|default([], true) %}<li><code>{{ source }}</code></li>{% else %}<li>No source location recorded.</li>{% endfor %}</ul></section>
+          <section><h3>Provenance</h3><ul class="dc-sources">{% for ref in contract.evidence|default([], true) %}<li><code>{{ ref.path }}{% if ref.lines %}:{{ ref.lines }}{% endif %}</code>{% if ref.note %}<span>{{ ref.note }}</span>{% endif %}</li>{% else %}<li>No evidence location recorded.</li>{% endfor %}</ul></section>
+        </div>
+      </div>
+    </details></li>
+    {% endfor %}
+  </ul>
+  {% if not contracts %}<div class="dc-empty"><h3>{% if not contract_view %}Contract inventory unavailable{% elif contract_filters.contract_q or contract_filters.contract_chain or contract_filters.contract_kind or contract_filters.contract_evidence %}No contracts match these filters{% else %}No recorded deployments to display{% endif %}</h3><p>{% if not contract_view %}Deployment data was not supplied with this view. The process and schedule register above remains available.{% elif contract_filters.contract_q or contract_filters.contract_chain or contract_filters.contract_kind or contract_filters.contract_evidence %}Try another search or <a href="/jobs#deployed-contracts">clear the filters</a>. Global counts above still cover the full catalog.{% else %}An empty catalog does not establish that no contracts have been deployed. Missing evidence is not zero activity.{% endif %}</p></div>{% endif %}
+
+  <details class="dc-coverage" id="contract-coverage"><summary><span><strong>Coverage, exclusions &amp; gaps</strong><span class="dc-meta">What this recorded inventory does and does not establish</span></span><span class="dc-chevron" aria-hidden="true">+</span></summary>
+    <div class="dc-coverage-body"><p>{{ contract_value(coverage.summary, 'Catalog coverage has not been reported. Completeness is not established.') }}</p><div class="dc-detail-grid">
+      <section><h3>Excluded from deployment counts</h3><ul class="dc-notes">{% for exclusion in coverage.exclusions|default([], true) %}<li>{{ exclusion }}</li>{% else %}<li>Fork-only and staged-only deployments, source-only contracts, and third-party protocol targets.</li>{% endfor %}</ul></section>
+      <section><h3>Known evidence gaps</h3><ul class="dc-notes">{% for gap in coverage.gaps|default([], true) %}<li>{{ gap }}</li>{% else %}<li>No additional gaps recorded; this is not proof of complete coverage.</li>{% endfor %}</ul></section>
+      {% if contract_view.notices %}<section class="dc-wide"><h3>Catalog notes</h3><ul class="dc-notes">{% for notice in contract_view.notices %}<li>{{ notice }}</li>{% endfor %}</ul></section>{% endif %}
+    </div></div>
+  </details>
+  <div class="dc-footer"><p>Read-only inventory. Reloading rereads the catalog and cached job observations; it does not verify deployments on-chain.</p><a href="#jobs-register">Back to job register ↑</a></div>
+</section>

@@ -1,0 +1,187 @@
+/* Read-only operational panels: campaign, pipeline, mode, and wallets. */
+.table-wrap:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.ops-region{margin:44px 0 10px}
+.ops-region>.section-heading{margin-top:0}
+.ops-card{background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--line);border-top:5px solid var(--ink);padding:20px 22px;margin:0 0 16px}
+.ops-card>header{display:flex;justify-content:space-between;gap:18px;align-items:start;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px}
+.ops-card>header h3{margin:4px 0 0;font-size:21px}
+.ops-card>header h4{margin:0;font-size:15px}
+.ops-card .ops-lede{margin:0;font-size:11px;color:var(--muted);max-width:430px}
+.ops-card-head-side{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.ops-empty{margin:6px 0 0;padding:24px;border:1px dashed var(--muted);background:var(--empty-bg)}
+.ops-empty code{display:inline-block;margin-top:7px;font-size:11px;overflow-wrap:anywhere}
+.ops-note{font-size:11px;color:var(--muted);margin:12px 0 0;overflow-wrap:anywhere}
+.ops-note code{font-size:11px}
+.ops-split{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;align-items:start}
+.ops-sub{border:1px solid var(--line);background:var(--raised);padding:14px 15px}
+.ops-sub>header{display:flex;justify-content:space-between;gap:12px;align-items:start;margin-bottom:10px}
+.ops-sub h4{margin:0;font-size:15px}
+.ops-sub .ops-lede{margin:3px 0 0}
+
+/* Campaign coverage */
+.coverage-stats{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 14px}
+.coverage-stats .stat{flex:1 1 110px;border:1px solid var(--line);border-top:4px solid var(--muted);background:var(--card);padding:10px 12px;display:grid;gap:2px}
+.coverage-stats .stat b{font:700 24px/1 Georgia,serif}
+.coverage-stats .stat span{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.coverage-stats .stat.covered{border-top-color:var(--ok)}
+.coverage-stats .stat.blocked{border-top-color:var(--red)}
+.coverage-stats .stat.missing{border-top-color:var(--muted)}
+.coverage-stats .stat.stale{border-top-color:var(--amber)}
+.coverage-meta{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:0 0 14px}
+.coverage-meta strong{color:var(--ink)}
+.coverage-table td small{display:block;color:var(--muted);margin-top:3px}
+.coverage-table details summary{cursor:pointer;font-size:11px;color:var(--amber)}
+.coverage-table ul{margin:6px 0 0;padding-left:17px;font-size:11px;color:var(--muted)}
+.coverage-table .row-stale td{background:var(--warn-bg)}
+
+/* Pipeline */
+.producer-list{width:100%;border-collapse:collapse}
+.producer-list th,.producer-list td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;font-size:12px}
+.producer-list tr.attention td{background:var(--danger-bg);border-bottom-color:var(--danger-line)}
+.producer-list tr.attention td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+.audit-strips{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.audit-strip{border:1px solid var(--line);background:var(--raised);padding:12px 13px}
+.audit-strip.attention{border-color:var(--amber);background:var(--warn-bg)}
+.audit-strip header{display:flex;justify-content:space-between;gap:10px;align-items:start;margin-bottom:8px}
+.audit-strip h4{margin:0;font-size:14px}
+.audit-strip dl{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;margin:0}
+.audit-strip dt{font-size:9px}
+.audit-strip dd{font-size:12px;margin:0 0 5px}
+.event-list{list-style:none;margin:0;padding:0}
+.event-item{border:1px solid var(--line);border-left:4px solid var(--muted);padding:9px 11px;margin:0 0 8px;background:var(--raised)}
+.event-item.promoted{border-left-color:var(--lime);background:var(--lime-tag-bg)}
+.event-item header{display:flex;justify-content:space-between;gap:10px;align-items:start}
+.event-item .event-id{font-size:12px;font-weight:bold;overflow-wrap:anywhere}
+.event-item dl{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 0;font-size:11px}
+.event-item dt{font-size:9px}
+.event-item dd{margin:0}
+.tag{display:inline-block;padding:2px 7px;border:1px solid currentColor;border-radius:999px;font-size:9px;font-weight:bold;letter-spacing:.05em;white-space:nowrap}
+.tag.promoted{color:var(--lime-tag-fg);background:var(--lime-tag-bg)}
+.tag.terminal{color:var(--muted);background:var(--neutral-bg)}
+.tag.attention{color:var(--red);background:var(--danger-bg)}
+
+/* Mode */
+.mode-banner{display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap;border:1px solid var(--ink);border-left:7px solid var(--muted);background:var(--neutral-bg);padding:14px 16px;margin-bottom:16px}
+.mode-banner.is-live{border-left-color:var(--amber);background:var(--warn-bg)}
+.mode-banner h3{margin:4px 0 0;font-size:26px;letter-spacing:.02em}
+.mode-banner p{margin:4px 0 0;font-size:11px;color:var(--muted)}
+.mode-score{text-align:right;display:grid;gap:2px}
+.mode-score b{font:700 30px/1 Georgia,serif}
+.mode-score span{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.gate-list{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:8px}
+.gate{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;border:1px solid var(--line);border-left:5px solid var(--muted);background:var(--raised);padding:11px 13px}
+.gate.pass{border-left-color:var(--ok)}
+.gate.fail{border-left-color:var(--red);background:var(--danger-bg)}
+.gate.unknown{border-left-color:var(--amber);background:var(--warn-bg)}
+.gate h4{margin:0;font-size:14px}
+.gate p{margin:3px 0 0;font-size:11px;color:var(--muted)}
+.gate .gate-source{font-size:10px;color:var(--muted);font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
+.gate .gate-index{font:700 13px/1 Georgia,serif;color:var(--muted);padding-top:2px}
+.batch-facts{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin:0 0 4px}
+.batch-facts div{padding:7px 0;border-top:1px solid var(--line)}
+
+/* Wallets */
+.wallet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.wallet-chain{border:1px solid var(--line);border-top:4px solid var(--blue);background:var(--raised);padding:14px 15px}
+.wallet-chain header{display:flex;justify-content:space-between;gap:10px;align-items:start;margin-bottom:10px}
+.wallet-chain h4{margin:0;font-size:15px}
+.wallet-chain .chain-id{font-size:10px;color:var(--muted)}
+.wallet-row{border-top:1px solid var(--line);padding:9px 0}
+.wallet-row:first-of-type{border-top:0}
+.wallet-row.error{border-left:3px solid var(--red);background:var(--danger-bg);padding-left:9px}
+.wallet-row-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.wallet-row-head strong{font-size:13px;overflow-wrap:anywhere}
+.wallet-balance{font:700 17px/1.2 Georgia,serif;white-space:nowrap}
+.wallet-balance small{margin-left:4px;font:700 11px ui-monospace,monospace;color:var(--muted)}
+.wallet-facts{display:flex;gap:14px;flex-wrap:wrap;margin:5px 0 0;font-size:11px;color:var(--muted)}
+.wallet-facts dt{font-size:9px}
+.wallet-facts dd{margin:0}
+.wallet-tokens{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.wallet-token{border:1px solid var(--line);background:var(--surface-3);padding:3px 8px;font-size:11px}
+.wallet-token b{font-family:Georgia,serif}
+.wallet-token.zero b{color:var(--muted);font-weight:normal}
+.no-data{color:var(--muted)}
+.wallet-errors{margin:14px 0 0;border:1px solid var(--red);background:var(--danger-bg);padding:11px 13px}
+.wallet-errors h4{margin:0 0 6px;font-size:13px;color:var(--red)}
+.wallet-errors ul{margin:0;padding-left:17px;font-size:11px}
+
+@media (prefers-reduced-motion:no-preference){.ops-card{animation:rise .35s ease both}}
+@media(max-width:900px){.ops-split,.audit-strips{grid-template-columns:1fr}.mode-score{text-align:left}}
+@media(max-width:760px){.ops-card{padding:16px}.gate{grid-template-columns:auto 1fr}.gate .tag{grid-column:1/-1}.batch-facts{grid-template-columns:1fr}}
+
+/* Wallet connect, manual add, watchlist, and collector controls. */
+.wallet-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:12px 0}
+.wallet-button{border:1px solid var(--ink);background:var(--card);color:var(--ink);padding:7px 12px;font:11px ui-monospace,Consolas,monospace;cursor:pointer}
+.wallet-button:hover{background:var(--surface-3)}
+.wallet-button.primary{background:var(--lime);color:var(--on-lime);font-weight:bold}
+.wallet-button[disabled]{opacity:.55;cursor:progress}
+.collector-state{font-size:11px;color:var(--muted);margin-left:auto;overflow-wrap:anywhere}
+.wallet-add{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(150px,.8fr) auto;gap:10px;align-items:end;margin:12px 0;padding:13px;border:1px dashed var(--line);background:var(--raised)}
+.wallet-add label{display:grid;gap:5px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.wallet-add input{width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 10px;font:12px ui-monospace,Consolas,monospace}
+.wallet-add input:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+.wallet-accounts{margin:12px 0;padding:12px 13px;border:1px solid var(--line);background:var(--raised)}
+.wallet-account-list{list-style:none;margin:8px 0 10px;padding:0;display:grid;gap:6px}
+.wallet-account-list label{display:flex;gap:8px;align-items:center;font-size:11px;overflow-wrap:anywhere}
+.wallet-message{margin:12px 0;padding:10px 13px;border-left:4px solid var(--muted);background:var(--neutral-bg);font-size:12px}
+.wallet-message[data-kind=ok]{border-left-color:var(--ok);background:var(--ok-bg)}
+.wallet-message[data-kind=warn]{border-left-color:var(--amber);background:var(--warn-bg)}
+.wallet-watchlist{margin:14px 0;padding:13px 14px;border:1px solid var(--line);background:var(--raised)}
+.wallet-watchlist h4{margin:0 0 8px;font-size:14px}
+.wallet-watchlist ul{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.wallet-watchlist li{display:flex;gap:12px;align-items:center;border-top:1px solid var(--line);padding:8px 0;font-size:12px}
+.wallet-watchlist li:first-child{border-top:0}
+.wallet-watchlist .watch-label{min-width:120px;font-weight:bold}
+.wallet-watchlist code{overflow-wrap:anywhere;color:var(--muted)}
+.wallet-remove{margin-left:auto;border:1px solid var(--danger-line);background:var(--danger-bg);color:var(--danger-fg);padding:5px 10px;font:10px ui-monospace,Consolas,monospace;cursor:pointer}
+.wallet-remove[disabled]{opacity:.55}
+@media(max-width:760px){.wallet-add{grid-template-columns:1fr}.collector-state{margin-left:0;width:100%}}
+
+/* Progress bars. Native <progress> and a div bar, both styled by CSS only
+   (CSP style-src 'self' blocks inline style attributes). */
+.progress-block{display:grid;gap:7px;margin:12px 0 6px}
+.progress-row{display:grid;grid-template-columns:118px minmax(0,1fr) auto;gap:10px;align-items:center}
+.progress-label{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.progress-value{font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.progress-caption{font-size:10px;color:var(--muted);margin:2px 0 0}
+progress.progress{width:100%;height:12px;border:1px solid var(--line);background:var(--neutral-bg);border-radius:999px;overflow:hidden;appearance:none;-webkit-appearance:none}
+progress.progress::-webkit-progress-bar{background:var(--neutral-bg)}
+progress.progress::-webkit-progress-value{background:var(--blue);transition:width .3s ease}
+progress.progress::-moz-progress-bar{background:var(--blue)}
+progress.progress.ok::-webkit-progress-value{background:var(--ok)}
+progress.progress.ok::-moz-progress-bar{background:var(--ok)}
+progress.progress.warn::-webkit-progress-value{background:var(--amber)}
+progress.progress.warn::-moz-progress-bar{background:var(--amber)}
+progress.progress.danger::-webkit-progress-value{background:var(--red)}
+progress.progress.danger::-moz-progress-bar{background:var(--red)}
+.progress.collector-progress{position:relative;display:block;height:10px;border:1px solid var(--line);background:var(--neutral-bg);border-radius:999px;overflow:hidden;margin:6px 0 0}
+.progress.collector-progress .bar{display:block;height:100%;width:100%;background:var(--blue)}
+.progress.collector-progress.ok .bar{background:var(--ok)}
+.progress.collector-progress.danger .bar{background:var(--red)}
+.progress.collector-progress.running{border-color:var(--blue)}
+.progress.collector-progress.running .bar{background:linear-gradient(90deg,transparent,var(--blue),transparent);background-size:220% 100%;animation:progress-slide 1.1s linear infinite}
+@keyframes progress-slide{from{background-position:110% 0}to{background-position:-110% 0}}
+@media (prefers-reduced-motion:reduce){.progress.collector-progress.running .bar{animation:none;background:var(--blue)}progress.progress::-webkit-progress-value{transition:none}}
+
+/* Stablecoin USD totals. Values are shown only when the artifact prices them. */
+.pill.stable-total{color:var(--blue);background:var(--info-bg)}
+.pill.wallet-total{color:var(--ink);background:var(--surface-3);border-color:var(--blue)}
+
+/* Watched-wallets summary and per-address outcomes. */
+.wallet-summary{margin:13px 0}
+.wallet-summary li{flex-wrap:wrap}
+.wallet-summary .watch-total{margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.wallet-summary .watch-total.missing{color:var(--muted)}
+.wallet-summary .wallet-remove{margin-left:10px}
+.family-tag{display:inline-block;margin:0 8px 0 0;padding:2px 6px;border:1px solid var(--line);border-radius:999px;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface-3)}
+.wallet-chain.solana{border-top-color:var(--lime-tag-fg)}
+.wallet-outcomes{margin:10px 0;padding:12px 13px;border:1px solid var(--line);background:var(--raised)}
+.wallet-outcome-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.outcome{display:flex;gap:10px;align-items:baseline;font-size:12px;border-left:4px solid var(--muted);padding:4px 0 4px 9px}
+.outcome code{overflow-wrap:anywhere}
+.outcome.ok{border-left-color:var(--ok)}
+.outcome.warn{border-left-color:var(--amber)}
+.outcome.error{border-left-color:var(--red)}
+.token-usd{color:var(--muted);font-variant-numeric:tabular-nums}
+.wallet-stable{margin:7px 0 0;padding-top:6px;border-top:1px dashed var(--line);font-size:12px;color:var(--ink)}
+.wallet-stable strong{font-family:Georgia,serif;font-variant-numeric:tabular-nums}

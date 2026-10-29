@@ -1,0 +1,1010 @@
+{
+  "schema": "findings-catalog/v1",
+  "catalogAsOf": "2026-10-27",
+  "generatedAt": "2026-10-28T03:46:36.892Z",
+  "scopeNote": "Consolidated session findings. Ordered by priority. Most entries are definitive NEGATIVE results or CLOSED defects - absence of a profitable route is itself the finding. Readiness is never implied by the presence of code, a quote, or a rehearsal.",
+  "statusLegend": {
+    "CLOSED_NEGATIVE": "Investigated and closed: no action available, with measured reason.",
+    "ARMED": "Live and authorised to act within caps, currently firing nothing.",
+    "VERIFIED": "Mechanism proven by pinned rehearsal or journal evidence, not a profit claim.",
+    "FIXED": "Defect found and corrected, with tests.",
+    "BLOCKED": "Cannot proceed for an infrastructure or authority reason.",
+    "OPEN_LANE": "Active research; no conclusion yet."
+  },
+  "priorityLegend": {
+    "P0": "Blocks the objective or records a decisive negative.",
+    "P1": "Live capability that can act now.",
+    "P2": "Verified mechanism or evidence.",
+    "P3": "Defect found or corrected.",
+    "P4": "Open research lane.",
+    "P5": "Standing limitation or context."
+  },
+  "findings": [
+    {
+      "id": "F-01",
+      "priority": 0,
+      "severity": "P0",
+      "status": "CLOSED_NEGATIVE",
+      "category": "market-supply",
+      "title": "Morpho Ethereum + Base liquidation universe is net-negative",
+      "summary": "Fresh full-market sweep at block 26,286,562 found 1,983 protocol-liquidatable rows across 35 markets. 1,854 carry socialised bad debt; only 129 have collateral covering debt, totalling $121.37 of debt. At a ~2.6% bonus that is ~$3.16 gross across 129 transactions against ~$12.90 of gas.",
+      "measured": {
+        "liquidatableRows": 1983,
+        "badDebtRows": 1854,
+        "cleanRows": 129,
+        "cleanDebtUsd": 121.37,
+        "grossUsd": 3.16,
+        "gasUsd": 12.9,
+        "netUsd": -9.74
+      },
+      "evidence": [
+        "reports/raw/fast/morpho-clean-liquidatable-20261027.json",
+        "reports/raw/fast/morpho-band-fresh-20261027.json"
+      ],
+      "action": "Do not scan Morpho Ethereum/Base for liquidation targets again without a market-structure change.",
+      "lane": "closed"
+    },
+    {
+      "id": "F-02",
+      "priority": 0,
+      "severity": "P0",
+      "status": "CLOSED_NEGATIVE",
+      "category": "market-supply",
+      "title": "Aave opportunity set is dust",
+      "summary": "480 health-liquidatable Aave V3 positions with a maximum debt of $22.51; 477 are under $1. The Aave scan lane also exits INCOMPLETE.",
+      "measured": {
+        "liquidatable": 480,
+        "maxDebtUsd": 22.51,
+        "underOneUsd": 477
+      },
+      "evidence": [
+        "reports/raw/fast/liquidation-scan-20261025/tables/summary.json"
+      ],
+      "action": "Deploying the two undeployed Aave/Balancer adapters would chase a $22 market. Declined.",
+      "lane": "closed"
+    },
+    {
+      "id": "F-03",
+      "priority": 0,
+      "severity": "P0",
+      "status": "CLOSED_NEGATIVE",
+      "category": "postmortem",
+      "title": "M32 was lost to a competitor, and was not profitably winnable at their bid",
+      "summary": "Our watcher stopped at 18:45:27Z after 2,267 cycles with no prepared boundary ever entered; competitor liquidated at 18:45:47Z. Root cause: eligibility and sizing used parent-time rather than child-time inputs. Even correctly modelled, matching the rival's aggregate priority payment yields -$67.80.",
+      "measured": {
+        "cycles": 2267,
+        "healthyCycles": 910,
+        "holdCycles": 1357,
+        "preparedBoundaries": 0,
+        "rivalMatchNetUsd": -67.8,
+        "lowFeeCounterfactualUsd": 216.7,
+        "bidShortfallPct": 23.79
+      },
+      "evidence": [
+        "reports/m32-postmortem-20261027.md",
+        "coordination/handoffs/20261027-m32-postmortem.md"
+      ],
+      "action": "Correction recovers the modelling defect; it does not create a profitable bid envelope.",
+      "lane": "closed"
+    },
+    {
+      "id": "F-04",
+      "priority": 0,
+      "severity": "P0",
+      "status": "BLOCKED",
+      "category": "infrastructure",
+      "title": "Arbitrum borrower discovery is blocked by provider coverage",
+      "summary": "9 Arbitrum endpoints tried, 3 respond and agree on finalized block 518,849,888, but only one distinct quorum-reviewed family responds, no endpoint serves archive state below finalized, and no endpoint serves a wide eth_getLogs range (infura caps at 10,000 blocks).",
+      "measured": {
+        "endpointsTried": 9,
+        "responding": 3,
+        "reviewedFamilies": 1,
+        "finalizedBlock": 518849888
+      },
+      "evidence": [
+        "staging/morpho-arbitrum-discovery-20261027.cjs",
+        "STATE.md"
+      ],
+      "action": "Requires a second archive-capable provider, a hosted index, or accepting no discovery.",
+      "lane": "closed"
+    },
+    {
+      "id": "F-05",
+      "priority": 1,
+      "severity": "P1",
+      "status": "BLOCKED",
+      "category": "live-capability",
+      "title": "Base configured-loop telemetry observed; final profit evidence blocks signing readiness",
+      "summary": "Parent observed Base PID 32980 at 2026-10-28 05:35 UTC and fresh armed=true, fired=0 telemetry at 05:36 UTC. This is configured-loop telemetry, not signing readiness: executeGuarded.prepare lacks conservativeProfitBeforeGasWei, so the final shared guard holds. The prior catalog's #B8 wstETH/WETH margin of 2.71 bps and ~$458 full-size bonus are historical, not new measurements. The loop was left untouched, not stopped.",
+      "measured": {
+        "observedPid": 32980,
+        "processObservedAt": "2026-10-28 05:35 UTC",
+        "telemetryObservedAt": "2026-10-28 05:36 UTC",
+        "observedArmed": true,
+        "historicalCatalogAsOf": "2026-10-27",
+        "historicalClosestBps": 2.7056,
+        "historicalTargets": 15,
+        "fired": 0,
+        "historicalMinProfitUsdc": 100,
+        "historicalMaxGas": 1500000,
+        "historicalSignedPerDay": 3,
+        "historicalB8DebtWeth": 18.4527,
+        "historicalB8BonusUsd": 458,
+        "finalProfitEvidence": "PROFIT_UNVERIFIED",
+        "latestSnapshotCheckedAt": "2026-10-28T06:03:44.706Z",
+        "latestSnapshotBlock": 53189037,
+        "latestSnapshotBlockHash": "0x1d04b136dcbae3b76fe5998f499836f8d02585dee54bd92f7ac62cd41ebb70df",
+        "latestSnapshotTimestampRaw": "1793167421",
+        "latestSnapshotStatus": "CURRENTLY_INELIGIBLE",
+        "latestSnapshotCoverage": "COMPLETE_CURRENT_DIAGNOSTIC",
+        "latestHealthFactorRaw": "1000254294242056343",
+        "latestAccruedDebtWethRaw": "18453023585281114939",
+        "latestAccruedDebtWeth": "18.453023585281114939",
+        "latestRouteFactoryGetter": "factory",
+        "latestRouteFactory": "0x33128a8fc17869897dce68ed026d694621f6fdfd",
+        "latestRoutePool": "0x20e068d76f9e90b90604500b84c7e19dcb923e7e",
+        "latestCanonicalAtClose": true
+      },
+      "evidence": [
+        "reports/raw/fast/base-morpho-executor-live-watch.json",
+        "coordination/live-execution-batch-base-morpho-20261020.json",
+        "tools/execute-base-morpho-liquidation.js",
+        "tools/lib/wallet-execution-guard.js",
+        "reports/raw/fast/next-moves-20261028/WORK.md",
+        "reports/raw/fast/next-moves-20261028/base-current-corrected.json",
+        "reports/raw/fast/next-moves-20261028/funded-final-summary.json"
+      ],
+      "action": "Keep readiness blocked until exact conservative native-profit evidence reaches the final guard and lifecycle authorization is validated. Do not infer profitability from armed telemetry or historical bonuses; do not weaken the shared guard. The latest #B8 complete current negative control is scoped to block 53189037: fresh accrued debt is 18.453023585281114939 WETH and HF raw is 1000254294242056343. Exact eth_call and eth_estimateGas both return canonical MORPHO_HEALTHY reverts on both qualified independent witnesses; terminal headers agree, so #B8 is not liquidatable at that pin. The router factory() getter and factory.getPool corroborate the exact route pool 0x20e068d76f9e90b90604500b84c7e19dcb923e7e. The quote is not profit; the L1 getter used execution calldata only, not a signed transaction, so the transaction fee remains unknown. The terminal three-target overall eligible and profitable counts remain UNKNOWN, not zero. No process or safety hold changed.",
+      "lane": "blocked"
+    },
+    {
+      "id": "F-06",
+      "priority": 1,
+      "severity": "P1",
+      "status": "BLOCKED",
+      "category": "live-capability",
+      "title": "Arbitrum configured-loop telemetry observed; final profit evidence blocks signing readiness",
+      "summary": "Parent observed Arbitrum PID 37640 at 2026-10-28 05:35 UTC and fresh armed=true, fired=0 telemetry at 05:36 UTC. This is configured-loop telemetry, not signing readiness: executeGuarded.prepare lacks conservativeProfitBeforeGasWei, so the final shared guard holds. The prior catalog's four targets within 88 bps and #ARB9 debt of $4,568,256 / ~$119,536 full-size bonus at 87.5 bps are historical, not new measurements. The loop was left untouched, not stopped.",
+      "measured": {
+        "historicalPid": 29844,
+        "observedPid": 37640,
+        "processObservedAt": "2026-10-28 05:35 UTC",
+        "telemetryObservedAt": "2026-10-28 05:36 UTC",
+        "observedArmed": true,
+        "historicalCatalogAsOf": "2026-10-27",
+        "historicalClosestBps": 30.5676,
+        "historicalTargets": 9,
+        "fired": 0,
+        "historicalMinProfitUsdc": 5,
+        "historicalMaxGas": 1200000,
+        "historicalSignedPerDay": 5,
+        "historicalArb9DebtUsd": 4568256,
+        "historicalArb9BonusUsd": 119536,
+        "finalProfitEvidence": "PROFIT_UNVERIFIED",
+        "latestQualificationCheckedAt": "2026-10-28T05:58:46.658Z",
+        "latestQualificationTarget": "#ARB1",
+        "latestQualificationOutcome": "UNKNOWN",
+        "latestQualificationCode": "STATE_CONSENSUS_UNAVAILABLE"
+      },
+      "evidence": [
+        "reports/raw/fast/arb-morpho-executor-live-watch.json",
+        "coordination/live-execution-batch-arbitrum-morpho-20261021.json",
+        "tools/execute-arb-morpho-liquidation.js",
+        "tools/lib/wallet-execution-guard.js",
+        "reports/raw/fast/next-moves-20261028/WORK.md",
+        "reports/raw/fast/next-moves-20261028/funded-current-expanded-pool.json",
+        "reports/raw/fast/next-moves-20261028/funded-final-summary.json"
+      ],
+      "action": "Keep readiness blocked until exact conservative native-profit evidence reaches the final guard and lifecycle authorization is validated. Do not infer profitability from armed telemetry or historical bonuses; do not weaken the shared guard. The latest #ARB1 qualification remains UNKNOWN at STATE_CONSENSUS_UNAVAILABLE, not healthy or a negative result. Current eligibility, fees and profit are unknown; the terminal three-target overall eligible and profitable counts remain UNKNOWN, not zero. The configured loop was left untouched and the safety hold is unchanged.",
+      "lane": "blocked"
+    },
+    {
+      "id": "F-07",
+      "priority": 2,
+      "severity": "P2",
+      "status": "VERIFIED",
+      "category": "routes",
+      "title": "Ten exit routes settle end-to-end against deployed executors",
+      "summary": "Ten routes verified by remote eth_simulateV1 and by keyless local Anvil fork with two-family corroborated bytecode, isolated snapshots, exact gas and executor residual balances.",
+      "measured": {
+        "routes": 10,
+        "remoteSimPassed": 10,
+        "anvilRehearsalsPassed": 10,
+        "anvilPin": 26284002,
+        "remoteAnchor": 26284007
+      },
+      "evidence": [
+        "reports/raw/fast/niche-routes-future-sim-verification-20261027.json",
+        "reports/raw/fast/niche-routes-anvil-fork-rehearsal-20261027.json"
+      ],
+      "action": "Mechanics proven under hypothetical fixtures; natural eligibility and profit remain unestablished.",
+      "lane": "verified"
+    },
+    {
+      "id": "F-08",
+      "priority": 2,
+      "severity": "P2",
+      "status": "VERIFIED",
+      "category": "signing",
+      "title": "Signing path proven from a prior executor journal",
+      "summary": "A sister executor journal records 3 signed events for the same account with zero KEY_UNAVAILABLE and one receipt-verified transaction, so signWithProcessKey demonstrably derives the matching key.",
+      "measured": {
+        "signedEvents": 3,
+        "keyUnavailable": 0,
+        "receiptVerified": 1
+      },
+      "evidence": [
+        "reports/raw/fast/aave-v4-v3-morpho-liquidator-execution",
+        "tools/lib/wallet-execution-guard.js:360"
+      ],
+      "action": "Base and Arbitrum loops have never signed; their lock/journal integration is untested, not broken.",
+      "lane": "verified"
+    },
+    {
+      "id": "F-09",
+      "priority": 3,
+      "severity": "P3",
+      "status": "CLOSED_NEGATIVE",
+      "category": "economic",
+      "title": "ynETHx discount is real but unreachable",
+      "summary": "ynETHx traded 19.937% below NAV, but the only NAV exit buffer held 0.000000100392358 WETH and the buffer-independent Curve exit nets -17.842% per dollar repaid. Capacity was 1.8% of the #M7 debt.",
+      "measured": {
+        "discountPct": 19.937,
+        "bufferWeth": 1.00392358e-7,
+        "dexNetPct": -17.842,
+        "capacityUsd": 29868,
+        "m7DebtUsd": 1672169
+      },
+      "evidence": [
+        "STATE.md"
+      ],
+      "action": "A discount is only money when redemption is permissionless, immediate and funded.",
+      "lane": "closed"
+    },
+    {
+      "id": "F-10",
+      "priority": 3,
+      "severity": "P3",
+      "status": "FIXED",
+      "category": "defect",
+      "title": "Producer conflated protocol eligibility with route executability",
+      "summary": "The buffer gate read MCwETH.balanceOf as shares with failures coerced to zero, so literal zero, dust and a failed read were indistinguishable. Now emits protocolLiquidatable, routeExecutable, bufferMaxWithdrawWeth and bufferReadStatus separately.",
+      "measured": {
+        "tests": 15,
+        "bufferReadStatus": "OK",
+        "bufferMaxWithdrawWei": 100392358
+      },
+      "evidence": [
+        "tools/watch-top-whale-triggers.js",
+        "tools/test/m32-monitor-binding.test.cjs"
+      ],
+      "action": "Liquidatable-now behaviour preserved byte-for-byte.",
+      "lane": "fixed"
+    },
+    {
+      "id": "F-11",
+      "priority": 3,
+      "severity": "P3",
+      "status": "FIXED",
+      "category": "defect",
+      "title": "Nine catalog provenance ranges pointed at unrelated code",
+      "summary": "swap-uniswap-v4 and swap-kyber pointed at PT-reUSD/Pendle code; redemption-reservoir pointed at weETH/WETH and Euler E9/E10; swap-same-asset claimed Base/Arbitrum identity exits that do not exist. Also corrected a 100 USDC floor contradiction against a 1 raw USDC policy.",
+      "measured": {
+        "entriesCorrected": 15,
+        "testsPassing": 95
+      },
+      "evidence": [
+        "dashboard/liquidity_catalog.json",
+        "coordination/handoffs/20261027-fixer-liquidity-catalog-correction.md"
+      ],
+      "action": "Status labels were left unchanged; source completeness is not readiness.",
+      "lane": "fixed"
+    },
+    {
+      "id": "F-12",
+      "priority": 3,
+      "severity": "P3",
+      "status": "FIXED",
+      "category": "defect",
+      "title": "Compiled adapter artifacts were stale, making a contract fix inert",
+      "summary": "Both Aave/Balancer repayment adapters had source hashes mismatching current source, and the rehearsal triggers load those artifacts. Regenerated and the source rehearsal re-passed 10/10.",
+      "measured": {
+        "artifactsRegenerated": 2,
+        "rehearsalCases": 10,
+        "gasPerSettlement": 262204
+      },
+      "evidence": [
+        "coordination/handoffs/20261027-fixer-aave-artifact-refresh.md"
+      ],
+      "action": "Fresh artifacts do not establish deployment existence; the catalog entry stays blocked.",
+      "lane": "fixed"
+    },
+    {
+      "id": "F-13",
+      "priority": 4,
+      "severity": "P4",
+      "status": "OPEN_LANE",
+      "category": "research",
+      "title": "Oracle integrity and manipulability sweep",
+      "summary": "Oracle composition resolved for all 25 distinct Morpho oracles behind tracked #M* markets: 15 FEED_ONLY, 7 VAULT_ONLY, 1 FEED+VAULT, 1 GETTERS_NO_FEED, 1 NO_KNOWN_GETTER. The seven VAULT_ONLY oracles derive price purely from an ERC-4626 conversion and are the donation/inflation surface. Staleness validation and manipulability remain unassessable at the interface level because every oracle is an adapter exposing only price().",
+      "measured": {
+        "distinctOracles": 25,
+        "feedOnly": 15,
+        "vaultOnly": 7,
+        "feedPlusVault": 1,
+        "gettersNoFeed": 1,
+        "noKnownGetter": 1,
+        "blockPinned": 26286815
+      },
+      "evidence": [
+        "reports/raw/fast/morpho-pyth-unsafe-consumers.json",
+        "reports/raw/fast/morpho-oracle-sweep-20260922"
+      ],
+      "action": "Delegated lane hit a provider policy gate; being completed in the orchestrator lane.",
+      "lane": "open"
+    },
+    {
+      "id": "F-14",
+      "priority": 4,
+      "severity": "P4",
+      "status": "CLOSED_NEGATIVE",
+      "category": "research",
+      "title": "Vault share accounting sweep",
+      "summary": "Closed with two corrections and one refutation. The suspected ~26.7% srUSD redemption loss was an inverted interpretation: previewRedeem(x) returns the srUSD required to receive x rUSD, i.e. ceil(x * 1e8 / currentPrice), so the measured 0.856219 was the inverse of the 1.16792549 price, not a loss. Reservoir redeemFee is 1.67 bps, not 1.67%. yoUSD prices shares from an oracle rather than totalAssets/totalSupply, so the simple donation premise does not apply; yoUSD redeem also returns gross assets while fees reduce the received amount, and insufficient liquidity returns zero and queues while withdraw always reverts UseRequestRedeem().",
+      "measured": {
+        "srUsdPreviewInterpretation": "INVERSE_FUNCTION_CONFIRMED",
+        "reservoirRedeemFeeBps": 1.67,
+        "srUsdPsmCashUsd": 78040,
+        "yoUsdValuation": "ORACLE_NOT_TOTAL_ASSETS",
+        "blockPinned": 26286715
+      },
+      "evidence": [
+        "targets/morpho-metamorpho/src/MetaMorpho.sol",
+        "targets/euler-evk/src/EVK/modules/Vault.sol"
+      ],
+      "action": "Delegated lane hit a provider policy gate; being completed in the orchestrator lane.",
+      "lane": "open"
+    },
+    {
+      "id": "F-15",
+      "priority": 4,
+      "severity": "P4",
+      "status": "OPEN_LANE",
+      "category": "research",
+      "title": "Composition and permissionless NAV-discount inventory",
+      "summary": "Measuring discount against withdrawable capacity for sUSDe, sUSDS, sfrxETH, wstETH, weETH, ezETH, rsETH, Pendle PTs, reUSDe, srUSD, sNUSD, yUSD, yoUSD, apyUSD, USD3, sUSDai, syrupUSDC and Base equivalents. Marks anything under $1,000 capacity as not actionable.",
+      "measured": {
+        "progress": null
+      },
+      "evidence": [],
+      "action": "Running.",
+      "lane": "open"
+    },
+    {
+      "id": "F-16",
+      "priority": 4,
+      "severity": "P4",
+      "status": "OPEN_LANE",
+      "category": "research",
+      "title": "Novelty audit of fresh deployments",
+      "summary": "Screening contracts deployed or upgraded in roughly the last 30 days for unverified source, fresh proxy implementations, uninitialised state, thin oracle sources and permissionless setters.",
+      "measured": {
+        "progress": null
+      },
+      "evidence": [
+        "tools/monitor-novelty-conditions.js",
+        "reports/raw/fast/recent-morpho-create-markets.json"
+      ],
+      "action": "Running.",
+      "lane": "open"
+    },
+    {
+      "id": "F-17",
+      "priority": 5,
+      "severity": "P5",
+      "status": "BLOCKED",
+      "category": "limitation",
+      "title": "Public RPC broadcast loses contested races by construction",
+      "summary": "Both armed loops broadcast over public RPC rather than private orderflow. On a $119,536 bonus at 87.5 bps, a private-bundle searcher is likely to win.",
+      "measured": {},
+      "evidence": [],
+      "action": "Private orderflow is a build, not a research result.",
+      "lane": "limitation"
+    },
+    {
+      "id": "F-18",
+      "priority": 5,
+      "severity": "P5",
+      "status": "BLOCKED",
+      "category": "limitation",
+      "title": "Producer distances are parent-time estimates",
+      "summary": "The producer accrues at the pinned parent block while execution lands in the child. At the child where M32 died the real margin was 0.000097640945073089 raw USDtb, erasable by an oracle move of about 1.11e-8. Child-time binding exists only for the dedicated M32 path.",
+      "measured": {
+        "m32ChildMarginRaw": "0.000097640945073089",
+        "erasingOracleMove": 1.11e-8
+      },
+      "evidence": [
+        "tools/watch-top-whale-triggers.js"
+      ],
+      "action": "Do not read bpsToLiquidation as child-time margin.",
+      "lane": "limitation"
+    },
+    {
+      "id": "F-19",
+      "priority": 3,
+      "severity": "P3",
+      "status": "VERIFIED",
+      "category": "oracle",
+      "title": "Seven of 25 tracked oracles price purely from an ERC-4626 conversion",
+      "summary": "Morpho oracle adapters behind #M32, #M31, #M7/#M7B, #M44, #M15, #M16 and #M18 expose no Chainlink feed and derive price only from a vault convertToAssets conversion. These are the donation and inflation surface. The remaining 15 are feed-only, one is feed-plus-vault (#M36/#M38), and two are unclassified variants.",
+      "measured": {
+        "distinctOracles": 25,
+        "vaultOnly": 7,
+        "feedOnly": 15,
+        "feedPlusVault": 1,
+        "blockPinned": 26286815
+      },
+      "evidence": [
+        "tools/watch-top-whale-triggers.js",
+        "STATE.md"
+      ],
+      "action": "Feasibility scales inversely with vault totalAssets; measured next in F-20.",
+      "lane": "verified"
+    },
+    {
+      "id": "F-20",
+      "priority": 3,
+      "severity": "P3",
+      "status": "OPEN_LANE",
+      "category": "oracle",
+      "title": "ynETHx oracle depth is thin relative to the credit extended against it",
+      "summary": "ynETHx reports totalAssets of only 4,200.29 with assetsPerShare 1.0990521, so roughly 42 WETH (about $98k) moves its oracle about 1 percent and 420 WETH about 10 percent, while a single Morpho market carries $1.67M debt against $1.80M collateral. Direction matters: a donation raises share price and therefore cannot push a position into liquidation.",
+      "measured": {
+        "ynethxTotalAssets": 4200.288658423227,
+        "ynethxAssetsPerShare": 1.0990521409486755,
+        "donation1PctWeth": 42.00288658423227,
+        "donation10PctWeth": 420.0288658423227,
+        "m7DebtUsd": 1672169,
+        "m7CollateralUsd": 1800153,
+        "yoUsdEdgeTotalAssets": 256789.175653
+      },
+      "evidence": [
+        "STATE.md"
+      ],
+      "action": "The only exploitable shape is borrowing against inflated collateral, whose net cost is donation times (1 minus attacker ownership share) and needs near-total vault ownership. Not established as profitable; requires a borrow-vector test before promotion.",
+      "lane": "open"
+    },
+    {
+      "id": "F-21",
+      "priority": 3,
+      "severity": "P3",
+      "status": "BLOCKED",
+      "category": "coverage",
+      "title": "Novelty monitoring coverage is materially stale",
+      "summary": "The freshness instruments are themselves out of date, so a quiet feed is not evidence of no new code. The novelty monitor watches only three Ethereum addresses, the new-deployment feed is September 15, the supplied Morpho market scan is July 2, the vault inventory is May 26, and the Arbitrum config/oracle-events capture reports TWO_FAMILIES_UNAVAILABLE with zero blocks scanned and an unadvanced cursor.",
+      "measured": {
+        "monitoredAddresses": 3,
+        "newDeploymentFeedAsOf": "2026-09-15",
+        "morphoMarketScanAsOf": "2026-07-02",
+        "vaultInventoryAsOf": "2026-05-26",
+        "arbitrumBlocksScanned": 0
+      },
+      "evidence": [
+        "tools/monitor-novelty-conditions.js",
+        "reports/monitor/new-deployment-feed.json",
+        "reports/monitor/aave-v3-arbitrum-config-oracle-events.json"
+      ],
+      "action": "Any novelty claim from these instruments is unsupported until coverage is refreshed.",
+      "lane": "blocked"
+    },
+    {
+      "id": "F-22",
+      "priority": 4,
+      "severity": "P4",
+      "status": "OPEN_LANE",
+      "category": "oracle",
+      "title": "Seven oracle-source replacements on 2026-10-12 remain unqualified",
+      "summary": "FRAX and LUSD had prices moved to a fixed $1 by adapter source replacement; BAL, FXS, KNC, RPL and STG had the same treatment but their source bodies were not retained. These are configuration changes, not fresh-code deployments, and setPrice is admin-gated rather than permissionless. Fixed pricing without a freshness check is not itself a vulnerability.",
+      "measured": {
+        "adaptersReplaced": 7,
+        "fraxBefore": 0.99180115,
+        "fraxAfter": 1,
+        "lusdBefore": 1.00534692,
+        "lusdAfter": 1,
+        "activationBlock": 26176059
+      },
+      "evidence": [
+        "reports/raw/fast/cash-impacting-deltas-20261019/resolution.json",
+        "reports/raw/fast/aave-oracle-updates-20261019/source-triage.md"
+      ],
+      "action": "Falsification F-A: bind each runtime to exact source, confirm outsider setPrice reverts, reproduce reserve and eMode restrictions, then compare affected borrowers across blocks 26176058 to 26176059. Frozen reserves do not categorically prevent liquidation.",
+      "lane": "open"
+    },
+    {
+      "id": "F-23",
+      "priority": 3,
+      "severity": "P3",
+      "status": "OPEN_LANE",
+      "category": "economic",
+      "title": "apyUSD delayed redemption spread is the only positive gross lead, and it is not atomic",
+      "summary": "The route USDC to apxUSD to apyUSD to redeemForReceipt, wait, claim, back to USDC pays a receipt fee of 3.4% at day 3 falling to 0% at day 20, plus a 0.1% vault unlocking fee. At 10,000 USDC the result is -$225.15 at 3 days, -$43.08 at 12 days and +$118.76 at 20 days; at 100,000 USDC and 20 days it is +$850.10 gross. Financing alone consumes the entire 20-day budget at roughly 21.68% annualized, so conservative net is not quantified.",
+      "measured": {
+        "tenK3dUsd": -225.15,
+        "tenK12dUsd": -43.08,
+        "tenK20dUsd": 118.76,
+        "hundredK20dUsd": 850.1,
+        "receiptFeeDay3Pct": 3.4,
+        "receiptFeeDay20Pct": 0,
+        "unlockFeePct": 0.1,
+        "testedMaxInputUsd": 99970.86,
+        "breakEvenFinancingAprPct": 21.68
+      },
+      "evidence": [
+        "STATE.md"
+      ],
+      "action": "Requires a complete delayed settlement simulation preserving purchase-induced pool changes, then financing, gas and uncertainty. Receipts are nontransferable and governance can change fees for existing receipts. Terminal quotes reused unchanged pinned state.",
+      "lane": "open"
+    },
+    {
+      "id": "F-24",
+      "priority": 3,
+      "severity": "P3",
+      "status": "CLOSED_NEGATIVE",
+      "category": "economic",
+      "title": "Every tested discounted-acquisition route is gross-negative",
+      "summary": "Sampled purchases followed by redemption all lost money before gas: USD3 round trip -$107.20 on 10,000 USDC; wstETH -$0.46 and -$4.68 on 1 and 10 ETH; weETH -$2.76 and -$27.87; sfrxETH -$3.98 and -$101.21; sUSDS 9,989.69 USDS; sDAI -$10.36 gross; Base sUSDS 547.98 USDC from 1,000, about -$451.89.",
+      "measured": {
+        "usd3RoundTripUsd": -107.2,
+        "wsteth1EthUsd": -0.46,
+        "wsteth10EthUsd": -4.68,
+        "weeth1EthUsd": -2.76,
+        "weeth10EthUsd": -27.87,
+        "sfrxeth1EthUsd": -3.98,
+        "sfrxeth10EthUsd": -101.21,
+        "sdaiGrossUsd": -10.36,
+        "baseSusdsUsd": -451.89
+      },
+      "evidence": [
+        "STATE.md"
+      ],
+      "action": "Same-asset gross-negative routes cannot be rescued by adding transaction costs. Rejection covers only the sampled venues and sizes, not a global optimum.",
+      "lane": "closed"
+    },
+    {
+      "id": "F-25",
+      "priority": 4,
+      "severity": "P4",
+      "status": "VERIFIED",
+      "category": "economic",
+      "title": "Large redemption liquidity exists but is not purchasable inventory",
+      "summary": "Holder-origin redemption calls succeed at scale: sUSDC about 9,997,086 USDC on a 10,000,000 withdrawal, USD3 about 19,994,171 USDC on 20,000,000, yoUSD Ethereum cash 143,521.41 USDC with 100,000 shares instant and 140,000 queued, yoUSD Base cash 157,133.20 USDC, srUSD PSM about 78,040 USDC. None of this establishes that an outside actor can acquire those holders' shares.",
+      "measured": {
+        "susdcWithdrawalUsd": 9997086,
+        "usd3WithdrawalUsd": 19994171,
+        "yoUsdEthCashUsdc": 143521.41,
+        "yoUsdBaseCashUsdc": 157133.2,
+        "srUsdPsmUsd": 78040,
+        "blockPinned": 26286715
+      },
+      "evidence": [
+        "STATE.md"
+      ],
+      "action": "Redemption capacity is not purchasable inventory; acquisition paths and all-in net remain unquantified.",
+      "lane": "verified"
+    },
+    {
+      "id": "F-26",
+      "priority": 3,
+      "severity": "P3",
+      "status": "VERIFIED",
+      "category": "composition",
+      "title": "Double-counted-collateral and donation hypotheses falsified on sampled positions",
+      "summary": "No simple Morpho double counting: all six sampled borrowers had supplyShares = 0 and health uses collateral once with separately accrued debt. Euler accountLiquidityFull returned exactly one collateral vault holding 370,165.99 syrupUSDC-equivalent shares, so no duplicated entry. All seven sampled positions were healthy at the pin with Euler checkLiquidation returning (0,0). Additional route blockers measured: yUSD redeem reverts paused, sNUSD Curve pool is denylisted, expired Pendle PT market swap reverts MarketExpired, weETH native redemption capacity is zero while its stETH limit is 5,000 stETH with a 10 bps fee, ezETH imposes a 14-day cooldown, and rsETH instant routes are disabled.",
+      "measured": {
+        "sampledMorphoBorrowers": 6,
+        "supplySharesNonZero": 0,
+        "eulerCollateralVaults": 1,
+        "positionsHealthy": 7,
+        "weethStethLimit": 5000,
+        "weethFeeBps": 10,
+        "ezEthCooldownDays": 14
+      },
+      "evidence": [
+        "targets/morpho-blue/src/Morpho.sol:526-536",
+        "targets/euler-evk/src/EVault/shared/LiquidityUtils.sol:97-119"
+      ],
+      "action": "Recursive-borrowing transaction provenance was not established; these are sampled leveraged positions, not proof of loops.",
+      "lane": "verified"
+    },
+    {
+      "id": "F-27",
+      "priority": 3,
+      "severity": "P3",
+      "status": "CLOSED_NEGATIVE",
+      "category": "oracle",
+      "title": "Pyth-unsafe oracle consumer hypothesis falsified across 14 chains",
+      "summary": "A cross-chain Morpho Blue oracle join inspected 2,852 markets and 113 unique oracles across 14 chains and found zero Pyth-linked markets, zero Pyth-unsafe markets and zero watch candidates, concluding no Pyth-linked liquid high-LLTV market in scope. One row had a failed price static call. The result is consistent with our own probe, where all 25 tracked Morpho oracles respond only to price() because they are adapters, so the Pyth linkage is not visible at the interface.",
+      "measured": {
+        "chainsScanned": 14,
+        "marketsFetched": 2852,
+        "routeRelevantMarkets": 115,
+        "uniqueOracles": 113,
+        "pythLinkedMarkets": 0,
+        "pythUnsafeMarkets": 0,
+        "watchCandidates": 0,
+        "routePositive": 0,
+        "priceStaticCallFailed": 1,
+        "artifactAsOf": "2026-06-30"
+      },
+      "evidence": [
+        "reports/raw/fast/morpho-pyth-unsafe-consumers.json"
+      ],
+      "action": "Artifact is dated 2026-06-30, so this is a bounded negative, not proof of current absence; re-running it is cheap if Pyth exposure is ever suspected again.",
+      "lane": "closed"
+    },
+    {
+      "id": "F-28",
+      "priority": 1,
+      "severity": "P1",
+      "status": "BLOCKED",
+      "category": "limitation",
+      "title": "Capital and gas funding are the binding constraint on every route",
+      "summary": "The account holds effectively no deployable capital: zero USDC, USDT, DAI, USDS and WETH on Ethereum, and 0.004022 USDC on Base. Native gas is present but thin - 0.00207011 ETH on Ethereum, 0.00046612 ETH on Base and 0.00044687 ETH on Arbitrum, roughly 4.84, 1.09 and 1.05 USD. Against the authorised 0.0002 ETH per-transaction spend cap that is about 2 attempts per L2, enough for one genuine opportunity but not for trial and error. Every capital-requiring route therefore cannot be funded, including the apyUSD carry and all discounted-acquisition paths.",
+      "measured": {
+        "idleStableUsd": 0,
+        "baseUsdc": 0.004022,
+        "ethNativeEth": 0.002070110569033376,
+        "baseNativeEth": 0.00046612479245824,
+        "arbNativeEth": 0.000446869642636634,
+        "ethNativeUsd": 4.84,
+        "baseNativeUsd": 1.09,
+        "arbNativeUsd": 1.05,
+        "authorizedEthPerTx": 0.0002,
+        "approxAttemptsPerL2": 2,
+        "blockEth": 26287052,
+        "blockBase": 53175458,
+        "blockArb": 518868344
+      },
+      "evidence": [
+        "STATE.md"
+      ],
+      "action": "Only flash-funded liquidation remains actionable, and it needs no principal - just enough gas for one attempt. The apyUSD carry is real but unfundable: it needs about 100,000 USDC and financing is available at 5.03% APR against a breakeven of roughly 15.5% at that size.",
+      "lane": "blocked"
+    },
+    {
+      "id": "F-29",
+      "priority": 1,
+      "severity": "P1",
+      "status": "BLOCKED",
+      "category": "live-capability",
+      "title": "Ethereum #2K held: historical WETH/WETH margin, hypothetical crossing and simulated receipt",
+      "summary": "Borrower 0x7a0575018b57cb64434fcd794f4f0c624fd0fbd3 was recorded with $26,607.03 WETH collateral and $25,276.35 WETH debt (95% LT eMode, HF 1.00001269). Price cancels from HF only for unchanged WETH/WETH composition and configuration; rates, utilization, account actions and governance can change the outcome. The retained 17.55h / 2026-10-28 20:49 UTC crossing is a frozen-state hypothetical scenario, not a forecast or eligibility. Raising flashAmount from 5.0 to 5.40 WETH tested the 50% close-factor cap: 0.042852411473245507 WETH was a simulated token receipt under an eligibility fixture (historical $100.27 valuation, 368,945 gas, zero swap), not proven realized profit or all-cost net.",
+      "measured": {
+        "historicalBpsToLiquidation": 0.1269,
+        "frozenStateHypotheticalCrossingHours": 17.55,
+        "frozenStateHypotheticalCrossingUtc": "2026-10-28 20:49 UTC",
+        "historicalCollateralUsd": 26607.03,
+        "historicalDebtUsd": 25276.35,
+        "eligibilityFixtureFlashWeth": 5.4,
+        "eligibilityFixtureReceiptWeth": "0.042852411473245507",
+        "historicalEligibilityFixtureReceiptUsd": 100.27,
+        "eligibilityFixtureGasUsed": 368945,
+        "historicalTestsPassed": 33,
+        "containmentObservedAt": "2026-10-28T05:45:05.753Z",
+        "observedAbsentPid": 28260,
+        "observedJournalCount": 2,
+        "observedPendingJournalCount": 0,
+        "executionHoldReason": "UNVERIFIED_STABLE_VALUATION_CONTAINMENT",
+        "latestSnapshotCheckedAt": "2026-10-28T05:58:46.658Z",
+        "latestSnapshotBlock": 26289282,
+        "latestSnapshotBlockHash": "0x9e15c0630f532c04a5cafcc55866d5b59fff755f4620b1805d206f88ff2fd8f0",
+        "latestSnapshotTimestampRaw": "1793167103",
+        "latestSnapshotStatus": "CURRENTLY_INELIGIBLE",
+        "latestHealthFactorRaw": "1000010801009031900",
+        "latestCanonicalAtClose": true
+      },
+      "evidence": [
+        "tools/watch-top-whale-triggers.js",
+        "tools/execute-top-whale-trigger.js",
+        "tools/test/execute-top-whale-trigger.test.js",
+        "reports/raw/fast/next-moves-20261028/ethereum-containment.json",
+        "reports/raw/fast/next-moves-20261028/funded-current-readonly.json",
+        "reports/raw/fast/next-moves-20261028/funded-current-expanded-pool.json",
+        "reports/raw/fast/next-moves-20261028/funded-final-summary.json"
+      ],
+      "action": "Retain #M29 (43.64h, 85.04 USDC) and #M10 (52.25h, 887.79 RLUSD) as frozen-state hypothetical scenarios, not forecasts or eligibility; amounts are not proven realized profit or all-cost net. M31 stub isolation does not prove fresh-process route hydration or live profitability. Parent found warm PID 28260 already absent at 05:45 UTC and 0 pending journals among 2 under the chain-1 wallet lock; status is BLOCKED / UNVERIFIED_STABLE_VALUATION_CONTAINMENT. No signer was restarted or killed, and no key was read. Source tests passing 160/160 do not establish profit or rearming. The ORIGINAL failed attempt at 2026-10-28 05:56:50 UTC stopped before simulation with TWO_FAMILIES_UNAVAILABLE on all three: 0/3 current-verified, profit unknown; historical only, not the terminal outcome. Terminal summary at 2026-10-28T06:05:17.032Z: two scoped targets verified healthy at their current pins (#2K block 26289282, HF raw 1000010801009031900; #B8 block 53189037, HF raw 1000254294242056343). Exact eth_call AND eth_estimateGas return canonical healthy reverts on both qualified independent witnesses for each target, and terminal headers agree. Neither is liquidatable at its pin; eligible among these two verified targets is 0. #ARB1 remains UNKNOWN at STATE_CONSENSUS_UNAVAILABLE, not healthy or a negative result. Overall eligible and profitable counts remain UNKNOWN, not zero. Safety hold unchanged; require exact-route all-cost profit evidence and authorization validation before any rearming.",
+      "lane": "blocked"
+    },
+    {
+      "id": "F-30",
+      "priority": 2,
+      "severity": "P2",
+      "status": "OPEN_LANE",
+      "category": "market-supply",
+      "title": "BNB Chain (chainId 56): bounded lending sample, coverage remains open",
+      "summary": "The BNB sample at block 130,208,197 does not exhaust the chain or all venues. Venus Flux resolved 35 vaults and sampled 594 positions, including 122 debt positions ($1.23M borrow), with zero liquidation hints. Venus Core inventoried 55 markets but checked only 3 recently discovered/seeded borrowers, with zero sampled shortfalls; one small account had $37.03 USDT debt and $12.67 cushion. The closest sampled Aave V3 BNB borrower had $151.95k debt and HF 1.096948 (~884 bps away), not the chain's closest borrower. Avalon BNB SolvBTC/PumpBTC (11 reserves) discovered zero borrowers in a 45,000-block window, not zero active historic borrowers. The recorded 0 BNB wallet balance is historical; failed-read counts are unknown.",
+      "measured": {
+        "bnbSampleBlock": 130208197,
+        "venusFluxVaults": 35,
+        "venusFluxSampledPositions": 594,
+        "venusFluxDebtPositions": 122,
+        "venusFluxSampledBorrowUsd": 1232417.97,
+        "venusFluxSampledLiquidationHints": 0,
+        "venusCoreMarketInventory": 55,
+        "venusCoreSampledBorrowers": 3,
+        "venusCoreSampledShortfalls": 0,
+        "aaveBnbClosestSampledHf": 1.096948,
+        "aaveBnbClosestSampledDebtUsd": 151952.48,
+        "avalonReserveInventory": 11,
+        "avalonBorrowerDiscoveryWindowBlocks": 45000,
+        "avalonBorrowersDiscoveredInWindow": 0,
+        "failedReadCount": null,
+        "historicalWalletBnbBalance": 0
+      },
+      "evidence": [
+        "reports/raw/fast/venus-flux-phase0.json",
+        "reports/monitor/venus-psr-state.json",
+        "tools/avalon-bnb-phase0.live.json"
+      ],
+      "action": "Keep the lane open: expand borrower discovery and record read failures before drawing broader conclusions. Do not add funding, bridge gas or deploy an executor without a qualified route.",
+      "lane": "open"
+    },
+    {
+      "id": "F-31",
+      "priority": 2,
+      "severity": "P2",
+      "status": "OPEN_LANE",
+      "category": "market-supply",
+      "title": "HyperEVM (chainId 999): bounded observations; source, provenance and borrower coverage remain open",
+      "summary": "At block 49724482, STEX was paused with zero pending requests; 303.505505078537752034 token1 claimable is a liability, not free inventory. The 32-route DEX grid had 8 nonpositive quotes, 21 ABI-unverified and 3 incomplete routes, with 0 qualified positive quotes; financing, liquid exit and full-flow gas remain unknown. Expanded pin 49725171 confirms 4 HyperLend Isolated pairs and 58 Euler vaults: all 58 accrued debt views decoded, 12 debt-bearing. Eight debt vaults received bounded recent/older 50,000-block log windows; 80 failed requests and zero seeds mean unknown borrower coverage, not no borrowers. Felix's historical 136 IDs were planned, not successfully enumerated; 115 status-1 troves excluded status 4, and read-failure counts were not retained. At pin 49724865, UBTC yielded 29 IDs/status/debt reads and 28 ICR reads (26 status 1, 3 status 4); zero below MCR among evaluated rows, one ICR failure. kHYPE was incomplete: 21 planned, 17 IDs, 13 status, 10 debt and 11 ICR reads; failures are unknown outcomes, not negatives. New captures have reviewedIndependentFamilies=false, zero stateRoot and PROVIDER_FINALIZED_TAG_ONLY: observation-only, no route promotion. Earlier Morpho's 35 event-touched identifiers are not fully covered markets; stored totals are not complete fresh accrual. Historical HyperLend HF is closest sampled, and October 21 DEX samples retain partial-fill/interface and unverified ProjectX ABI caveats. The 0 HYPE wallet balance is historical only.",
+      "measured": {
+        "historicalHyperLendMorphoRecentEventProbeBlock": 49716899,
+        "historicalFelixCapturedAt": "2026-10-28T03:37:24.743Z",
+        "historicalFelixBranches": 4,
+        "historicalFelixPlannedIds": 136,
+        "historicalFelixSuccessfulIds": null,
+        "historicalFelixStatus1Count": 115,
+        "historicalFelixReportedDebtUsd": 9252145.51,
+        "historicalFelixReportedApproxCollateralUsd": 24780000,
+        "historicalFelixReportedLiquidatable": 0,
+        "historicalFelixReportedNearMcr": 0,
+        "historicalFelixFailedReadCount": null,
+        "historicalFelixCacheFetchDiscrepancies": 2,
+        "historicalMorphoRecentEventMarketIds": 35,
+        "historicalMorphoClosestSampledStoredTotalsHf": 1.063843,
+        "historicalMorphoClosestSampledStoredTotalsBps": 600.12,
+        "historicalMorphoClosestSampledDebtUsd": 3161.6,
+        "historicalMorphoSecondSampledStoredTotalsHf": 1.086373,
+        "historicalMorphoSecondSampledStoredTotalsBps": 795.06,
+        "historicalMorphoSecondSampledDebtUsd": 36855.29,
+        "historicalHyperLendAddressCandidates": 50,
+        "historicalHyperLendDebtBearingAccounts": 23,
+        "historicalHyperLendClosestSampledHf": 1.074449,
+        "historicalHyperLendClosestSampledBps": 692.9,
+        "historicalHyperLendClosestSampledDebtUsd": 191851.55,
+        "historicalHyperLendClosestSampledCollateralUsd": 288703.97,
+        "historicalDexSampleDate": "2026-10-21",
+        "stexDexScreenBlock": 49724482,
+        "stexPaused": true,
+        "stexPendingRequestCount": "0",
+        "stexPendingToken0Raw": "0",
+        "stexPendingLpWithdrawalToken1Raw": "0",
+        "stexClaimableToken1LiabilityRaw": "303505505078537752034",
+        "stexClaimableToken1Liability": "303.505505078537752034",
+        "dexRoutes": 32,
+        "dexQuoteNonpositive": 8,
+        "dexAbiUnverified": 21,
+        "dexIncomplete": 3,
+        "dexQualifiedQuotePositive": 0,
+        "felixDiagnosticBlock": 49724865,
+        "felixDiagnosticBranches": 2,
+        "felixUbtcIds": 29,
+        "felixUbtcStatusReads": 29,
+        "felixUbtcDebtReads": 29,
+        "felixUbtcIcrReads": 28,
+        "felixUbtcStatus1": 26,
+        "felixUbtcStatus4": 3,
+        "felixUbtcEvaluatedBelowMcr": 0,
+        "felixUbtcIcrFailures": 1,
+        "felixKhypePlannedIds": 21,
+        "felixKhypeIds": 17,
+        "felixKhypeStatusReads": 13,
+        "felixKhypeDebtReads": 10,
+        "felixKhypeIcrReads": 11,
+        "felixKhypeFailedIdReads": 4,
+        "felixKhypeFailedStatusReads": 4,
+        "felixKhypeFailedDebtReads": 3,
+        "felixKhypeFailedIcrReads": 2,
+        "ubtcFetchedPriceRaw": "81013007173120000000000",
+        "ubtcFetchRedemptionPricePresent": false,
+        "ubtcRedemptionPriceRaw": null,
+        "khypeFetchedPriceRaw": "83660908578979785738",
+        "khypeExactImplementationSourceEquivalent": "unknown",
+        "expandedLendingBlock": 49725171,
+        "hyperLendIsolatedPairs": 4,
+        "eulerVaults": 58,
+        "eulerAccruedDebtViewsDecoded": 58,
+        "eulerDebtBearingVaults": 12,
+        "eulerDebtVaultsWithLogWindows": 8,
+        "eulerLogWindowBlocks": 50000,
+        "eulerFailedLogRequests": 80,
+        "eulerBorrowerSeeds": 0,
+        "eulerBorrowerCoverage": "UNKNOWN_LOG_FAILURES",
+        "reviewedIndependentFamilies": false,
+        "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "finality": "PROVIDER_FINALIZED_TAG_ONLY",
+        "conservativeNet": null,
+        "missingDataCount": null,
+        "failedReadCount": null,
+        "historicalWalletHypeBalance": 0
+      },
+      "evidence": [
+        "reports/raw/fast/felix-cdp-phase0.json",
+        "tools/scan-felix-cdp-phase0.js",
+        "tools/scan-hyperlend-live.js",
+        "tools/hyper-dex-roundtrip-screen.js",
+        "reports/raw/fast/next-moves-20261028/hyper-stex-dex.json",
+        "reports/raw/fast/next-moves-20261028/hyper-pinned-diagnostics.json",
+        "reports/raw/fast/next-moves-20261028/hyper-lending-followup.json",
+        "reports/raw/fast/next-moves-20261028/hyper-lending-expanded.json",
+        "reports/raw/fast/next-moves-20261028/hyper-verification.json",
+        "reports/raw/fast/next-moves-20261028/WORK.md"
+      ],
+      "action": "UBTC's verified source has no fetchRedemptionPrice(): missing ABI is not a zero price. Stale lastGoodPrice cache versus healthy fetchPrice eth_call (which discards updates) explains the difference; pinned underlying BTC price equals the fetched price. kHYPE fetched price exactly equals pinned HYPE/USD times the canonical rate, consistent with a historical source candidate, but exact implementation-source equivalence remains unverified. Registry/deployer runtime hashes correlate getters, not exact compiled source/runtime equality. No oracle bug is proved. Keep exact source, independent provenance, borrower coverage, fresh accrual and full-route economics gates open. No funding, HYPE bridge or executor deployment until an exact deployed route is validated.",
+      "lane": "open"
+    },
+    {
+      "id": "F-32",
+      "priority": 2,
+      "severity": "P2",
+      "status": "OPEN_LANE",
+      "category": "live-capability",
+      "title": "Ethereum warm-loop processing measured; execution remains held",
+      "summary": "The general Ethereum CLI supports process persistence, but ordinarily reacquires a pinned session per pass. The additive plain-session warm loop reuses qualification and repins between completed passes. Its retained log records 1,056 attempted passes: 1,055 armed reports followed by a fail-closed PIN_EVIDENCE_INVALIDATED stop at 2026-10-28 05:36:50 UTC. The 1,054 warm armed processing samples have a 2,424.189 ms median and 2,546.140 ms p95. These durations exclude idle head waits; 573 passes repeated the previous head. They are not full head-arrival-to-detection-to-preparation latency, proof of present liveness, or directly comparable to the earlier approximately 7.9 s status-write interval. At 05:52 UTC no Ethereum executor process was present, and its status separately recorded UNVERIFIED_STABLE_VALUATION_CONTAINMENT. The earlier latest-header implementation also stopped at pass 22 on provider skew; the common-height fix did not establish uninterrupted operation.",
+      "measured": {
+        "historicalPreWarmStatusIntervalMs": 7900,
+        "acquisitionFirstPassMs": 4620,
+        "acquisitionSteadyMs": 0,
+        "attemptedPasses": 1056,
+        "armedReports": 1055,
+        "unarmedPasses": 1,
+        "warmProcessingSamples": 1054,
+        "steadyMedianMs": 2424.189,
+        "steadyP95Ms": 2546.14,
+        "steadyMinMs": 2017.897,
+        "steadyMaxMs": 3082.671,
+        "sameHeadRepeatPasses": 573,
+        "terminalReason": "PIN_EVIDENCE_INVALIDATED",
+        "priorVersionDiedAtPass": 22,
+        "priorFailureReason": "PROVIDER_RESULT_DISAGREEMENT",
+        "sustainedOperationEstablished": false,
+        "fullHeadToPreparationLatencyMs": null,
+        "observedExecutorState": "STOPPED",
+        "observedAt": "2026-10-28T05:52:06Z"
+      },
+      "evidence": [
+        "tools/run-execute-warm-loop.js",
+        "tools/lib/executor-pinned-rpc.js",
+        "reports/raw/fast/eth-warm-loop-3.log",
+        "reports/raw/fast/eth-warm-loop-3.log.err",
+        "reports/raw/fast/next-moves-20261028/ethereum-status-before-containment.json",
+        "reports/raw/fast/next-moves-20261028/ethereum-containment.json"
+      ],
+      "action": "Keep the Ethereum safety hold until exact profit admission and authorization are reconciled by the execution owner. Preserve pin, wallet and approval safeguards; use approved renewal loading rather than rewriting historical approval evidence. Establish head-arrival and eligible preparation timing with a non-signing measurement before making end-to-end latency or competitive-inclusion claims. Missing current profit and liveness evidence remain unknown, not zero or ready.",
+      "lane": "open"
+    },
+    {
+      "id": "F-33",
+      "priority": 1,
+      "severity": "P1",
+      "status": "FIXED",
+      "category": "defect",
+      "title": "Unsafe stable-token profit authorization removed; unverified routes held",
+      "summary": "Removed the automatic stable=$1 conversion from ETH/USD with a 50 bps haircut: producer, runner invocation and export. A successful token simulation or positive token floor does not prove conservative liquid-native proceeds. Supported exact-variant profit evidence and existing WETH floors remain intact; missing evidence stays PROFIT_UNVERIFIED before wallet reconciliation, nonce work or signing. The focused suite passed 160/160. Separate M1 tests had 5 passes and 11 approval-fixture incompatibility failures; no pre-edit baseline equivalence is claimed and no approval bytes were changed. FIXED means the unsafe producer is contained, not that stable routes are unlocked or profit verified.",
+      "measured": {
+        "automaticProducerRemoved": true,
+        "focusedTestsPassed": 160,
+        "focusedTestsFailed": 0,
+        "m1TestsPassed": 5,
+        "m1TestsFailed": 11,
+        "m1BaselineFailureEquivalence": null,
+        "conservativeNativeProfitWei": null
+      },
+      "evidence": [
+        "tools/execute-top-whale-trigger.js",
+        "tools/test/execute-top-whale-trigger.test.js",
+        "tools/test/current-profit-hold.test.js",
+        "coordination/handoffs/20261028-fixer-guard-containment.md",
+        "reports/raw/fast/next-moves-20261028/ethereum-containment.json",
+        "reports/raw/fast/next-moves-20261028/funded-current-readonly.json",
+        "reports/raw/fast/next-moves-20261028/funded-final-summary.json"
+      ],
+      "action": "Keep unverified routes held and resolve lifecycle authorization before any rearming. The ORIGINAL failed attempt at 2026-10-28 05:56:50 UTC stopped before simulation with TWO_FAMILIES_UNAVAILABLE on Ethereum, Base and Arbitrum: 0/3 current-verified, profit unknown; historical only, not the terminal outcome. Terminal summary at 2026-10-28T06:05:17.032Z: two scoped targets verified healthy at their current pins (#2K block 26289282, HF raw 1000010801009031900; #B8 block 53189037, HF raw 1000254294242056343). Exact eth_call AND eth_estimateGas return canonical healthy reverts on both qualified independent witnesses for each target, and terminal headers agree. Neither is liquidatable at its pin; eligible among these two verified targets is 0. #ARB1 remains UNKNOWN at STATE_CONSENSUS_UNAVAILABLE, not healthy or a negative result. Overall eligible and profitable counts remain UNKNOWN, not zero. Safety hold unchanged. Passing source tests does not authorize activation or establish profit; require independently supported exact-route proceeds and all-cost net evidence.",
+      "lane": "fixed"
+    },
+    {
+      "id": "F-34",
+      "priority": 1,
+      "severity": "P1",
+      "status": "BLOCKED",
+      "category": "defect",
+      "title": "Approval lifecycle repaired; #2K+#2L guarded waiting armed",
+      "summary": "Historical reproduction at 2026-10-28T05:59:05.224Z: approvedAt checks absent in the underlying Ethereum approval validators and unified revoked=true not rejected; the warm wrapper directly loads primary approvals, overriding the renewal helper. The historical synthetic in-memory negative probes showed future approval accepted by both unified and morpho validators; unified revoked=true accepted, while morpho rejected revoked=true with BATCH_INVALID_OR_EXPIRED. Those historical results are defect reproductions, not successful lifecycle remediation tests; no approval file changed or authority was renewed by the review. Current correction verified at 2026-10-28T06:36:49.816Z: both Ethereum validators enforce approval time, revocation and strict expiry; renewal cannot rescue an invalid primary, and warm startup/pass/final callbacks use live renewal-aware loaders. These are Ethereum approval-document checks, not Base L2 validator checks. Lifecycle remediation only is verified: 92 lifecycle tests passed, 0 failed; together with 160 existing focused cases, 252 passed. Separate reconciliation remains 3 passed / 1 failed because the dedicated-Aave test reaches PROFIT_UNVERIFIED before expected expiry rejection; full integration is not green. Both actual unexpired batch validators passed and all eight post-fix in-memory negative controls were rejected. Approval, renewal and amendment bytes, caps and expiry are unchanged; no new grant or authority renewal. Historical next-block/M1 amendments bind historical bytes and are expired. Execution reactivation remains BLOCKED for broad multi-route activation; actual eligible preparation remains unexercised on the natural chain. Separately, user-approved guarded activation moved from the CURRENT #2K-only runner to exactly one CURRENT #2K+#2L runner PID 19916 at 2026-10-28T19:40:26Z, after shared-wallet exclusion and a fresh signing-trapped preflight; the former PID 36732 was stopped, not duplicated. The new scope admits only the exact 5.4 WETH/0.01 floor and 12 WETH/0.1 floor full plans under a 0.00075 ETH local ceiling. Verification found healthy zero-candidate waiting, two actual journals with zero pending and no execution; 274 targeted tests passed. #2A remains unarmed. This is waiting readiness, not natural eligibility, a submission or realized profit. No unauthorized signature or loss is established.",
+      "measured": {
+        "ethereumApprovedAtChecksEnforced": true,
+        "unifiedRevokedTrueRejected": true,
+        "warmWrapperUsesRenewalHelper": true,
+        "lifecycleTestsPassed": 92,
+        "lifecycleTestsFailed": 0,
+        "remediationVerified": true,
+        "remediationScope": "ETHEREUM_AUTHORIZATION_LIFECYCLE_ONLY",
+        "reactivationReady": false,
+        "reactivationScope": "BROAD_MULTI_ROUTE",
+        "eligiblePreparationExercised": false,
+        "eligiblePreparationScope": "NATURAL_CURRENT_CHAIN_ONLY",
+        "current2KGuardedWaitingArmed": false,
+        "current2KRunnerPid": 36732,
+        "current2KSingletonVerified": true,
+        "current2KActivatedAt": "2026-10-28T08:36:11.636Z",
+        "current2KLocalSpendCeilingWei": "750000000000000",
+        "current2KMinimumProfitWethWei": "10000000000000000",
+        "current2KFullGuardUnsignedVerified": true,
+        "current2KActivationTestsPassed": 320,
+        "current2KPendingAtVerification": 0,
+        "current2KRealizedProfitEstablished": false,
+        "current2KOnlyRunnerStoppedAt": "2026-10-28T19:40:26.337Z",
+        "current2K2LGuardedWaitingArmed": true,
+        "current2K2LRunnerPid": 19916,
+        "current2K2LScope": "CURRENT_2K_2L_ONLY",
+        "current2K2LSingletonVerified": true,
+        "current2K2LActivatedAt": "2026-10-28T19:40:43.916Z",
+        "current2K2LLocalSpendCeilingWei": "750000000000000",
+        "current2K2LTargets": ["#2K", "#2L"],
+        "current2K2LCandidateCountAtVerification": 0,
+        "current2K2LPendingAtVerification": 0,
+        "current2K2LActivationTestsPassed": 274,
+        "current2K2LRealizedProfitEstablished": false,
+        "current2K2LSettlementProofScope": "HYPOTHETICAL_LOCAL_ONLY_2L_0_48_WETH_2A_5_7083_WETH",
+        "focusedTestsPassed": 252,
+        "focusedTestsFailed": 0,
+        "focusedReconciliationTestsPassed": 3,
+        "focusedReconciliationTestsFailed": 1,
+        "postFixAuthorizationCheckedAt": "2026-10-28T06:36:49.816Z",
+        "postFixActualBatchValidatorsPassed": 2,
+        "postFixInMemoryNegativeControlsRejected": 8,
+        "postFixInMemoryNegativeControlsAccepted": 0,
+        "postFixApprovalBytesUnchanged": true,
+        "postFixRenewalBytesUnchanged": true,
+        "postFixHistoricalAmendmentBytesUnchanged": true,
+        "approvalFilesChangedByRemediation": false,
+        "authorityRenewedByRemediation": false,
+        "unauthorizedSignatureEstablished": false,
+        "lossEstablished": false,
+        "authorizationReviewCheckedAt": "2026-10-28T05:59:05.224Z",
+        "inMemoryUnifiedFutureApprovalAccepted": true,
+        "inMemoryMorphoFutureApprovalAccepted": true,
+        "inMemoryUnifiedRevokedAccepted": true,
+        "inMemoryMorphoRevokedAccepted": false,
+        "historicalAmendmentsExpiredAt": "2026-10-26T23:59:59Z",
+        "approvalFilesChangedByReview": false,
+        "authorityRenewedByReview": false
+      },
+      "evidence": [
+        "tools/lib/wallet-execution-guard.js",
+        "tools/execute-top-whale-trigger.js",
+        "tools/run-execute-warm-loop.js",
+        "reports/raw/fast/next-moves-20261028/WORK.md",
+        "reports/raw/fast/next-moves-20261028/authorization-review.json",
+        "tools/test/execution-authorization-lifecycle.test.cjs",
+        "reports/raw/fast/readiness-current-20261028T0619/authorization-final-verification.json",
+        "reports/raw/fast/readiness-current-20261028T0619/healthy-runner-replay.json",
+        "coordination/handoffs/20261028-readiness-current-validation.md",
+        "reports/raw/fast/native-weth-readiness-20261028/two-k-full-guard-parent-proof.json",
+        "reports/raw/fast/native-weth-readiness-20261028/two-k-guarded-activation-20261028T083603811Z.json",
+        "reports/raw/fast/top-whale-executor-live-watch.json"
+      ],
+      "action": "Current scoped action: preserve exactly one CURRENT #2K+#2L guarded runner PID 19916 with scope CURRENT_2K_2L_ONLY, the 0.00075 ETH local ceiling, exact 5.4 WETH/0.01 floor and 12 WETH/0.1 floor full plans, and unchanged shared wallet/authorization guards. #2A remains unarmed and broad activation remains BLOCKED. Healthy means wait with zero sends; execution requires natural eligibility and successful final simulation, gas, net and wallet checks within the existing batch through November 3. Do not start a broad runner, restore stable-token valuation assumptions or treat waiting as earned profit. Historical pre-activation note, superseded only for this scoped guarded-waiting path: Keep Ethereum stopped; no reactivation by this lane. Preserve fail-closed guards and historical authorization evidence. Do not repin expired amendments or rewrite approval/hash commitments to turn tests green. Natural current #2K and #B8 observations are healthy WAIT; #ARB1 remains provider-capability HOLD_UNKNOWN at STATE_CONSENSUS_UNAVAILABLE, not a negative result. The healthy #2K real-entry replay is WAIT_HEALTHY with zero candidates and zero preparation attempts; armed=true is execute-mode telemetry, not readiness. #2K's exact WETH floor already reaches the prepare callback in source, but actual eligible current prepare remains unexercised; source/runtime/inventory binding belongs to the separate native-weth-readiness-20261028 lane. #B8 has no unconditional 0.05 WETH inclusion floor: its bound is minLoanOut minus execution principal. Native-proof payload, conservative principal-window/inventory attribution and full rollup fee evidence remain missing. #ARB1 ends in USDT0 with no native exit proof. Lifecycle repair does not establish profit, eligible preparation or full integration success; preserve the separate 3-pass/1-fail reconciliation result and require the remaining proofs before any activation decision.",
+      "lane": "blocked"
+    }
+  ]
+}

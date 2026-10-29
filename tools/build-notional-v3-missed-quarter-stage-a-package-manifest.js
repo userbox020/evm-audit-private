@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+"use strict";
+
+// Offline package-sealing helper. It reads only declared local artifacts and
+// inputs, writes the preflight/manifest, and patches the runner's normalized
+// aggregate constant. It never opens endpoint inventories or performs I/O over
+// the network.
+const fs = require("fs");
+const r = require("./notional-v3-missed-quarter-stage-a-runner");
+
+function main() {
+  const preflightPath = r.ROOT + "/" + r.PREFLIGHT_REL;
+  fs.writeFileSync(preflightPath, `${JSON.stringify(r.dryPreflight(), null, 2)}\n`, { encoding: "utf8", flag: "w" });
+  const artifacts = r.REQUIRED_ARTIFACT_PATHS.map((relative) => r.fileRecord(relative, relative === `tools/${r.STEM}-runner.js`));
+  const localInputs = r.LOCAL_INPUT_RELS.map((relative) => r.fileRecord(relative));
+  const manifest = { schemaVersion: 2, findingId: r.FINDING_ID, status: "STAGE_A_OFFLINE_PACKAGE_VALIDATED_CAPTURE_NOT_EXECUTED",
+    source: { commit: r.SOURCE_COMMIT, tree: r.SOURCE_TREE }, networkReads: 0, inventoryReads: 0, captureExecuted: false,
+    offlineValidation: { checks: 148, fixtureClasses: 16, fullMockedTwoFamilyCapture: true }, artifacts, runtimeDependencyGraph: r.loadedDependencyGraph(), localInputs };
+  manifest.aggregateSha256 = r.packageAggregate(manifest);
+  const runnerPath = r.ROOT + `/tools/${r.STEM}-runner.js`, runner = fs.readFileSync(runnerPath, "utf8");
+  const patched = runner.replace(/const EXPECTED_PACKAGE_AGGREGATE = "[0-9a-f]{64}";/u, `const EXPECTED_PACKAGE_AGGREGATE = "${manifest.aggregateSha256}";`);
+  if (patched === runner && !runner.includes(manifest.aggregateSha256)) throw new Error("RUNNER_AGGREGATE_PATCH_FAILED");
+  fs.writeFileSync(runnerPath, patched, { encoding: "utf8", flag: "w" });
+  fs.writeFileSync(r.ROOT + "/" + r.MANIFEST_REL, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: "utf8", flag: "w" });
+  process.stdout.write(`sealed ${r.MANIFEST_REL} (${artifacts.length} artifacts; aggregate ${manifest.aggregateSha256})\n`);
+}
+try { main(); } catch (error) { process.stderr.write(`${error.message}\n`); process.exitCode = 1; }

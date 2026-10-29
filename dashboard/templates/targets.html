@@ -1,0 +1,316 @@
+{% extends 'base.html' %}
+{% set view = data|default({}, true) %}
+{% set is_inventory = view.view_mode == 'historical_inventory' %}
+{% set page_title = 'Historical inventory' if is_inventory else 'Trade candidates' %}
+{% set page_path = '/inventory' if is_inventory else '/targets' %}
+{% set api_path = '/api/v1/inventory' if is_inventory else '/api/v1/targets' %}
+{% set records_label = 'records' if is_inventory else 'candidates' %}
+{% set scope_label = 'Global' if is_inventory else 'Shortlist' %}
+{% set coverage_label = 'Stored-source coverage' if is_inventory else 'Candidate-source coverage' %}
+{% block title %}{{ page_title }} · Watchboard{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='targets.css') }}">
+<script src="{{ url_for('static', filename='targets.js') }}" defer></script>
+{% endblock %}
+
+{% macro value(item, fallback='Not reported') -%}
+  {{ item if item is defined and item is not none and item != '' else fallback }}
+{%- endmacro %}
+{% macro amount(item, unit, fallback='Not reported') -%}
+  {% if item is defined and item is not none and item != '' %}{{ item }} {{ unit or '(unit not reported)' }}{% else %}{{ fallback }}{% endif %}
+{%- endmacro %}
+{% macro freshness(state, age=none) -%}
+  {% set name = (state or 'UNKNOWN')|lower %}
+  <span class="pill {{ name if name in ['fresh', 'aging', 'stale', 'clock_skew'] else 'unknown' }}">{{ (state or 'UNKNOWN')|replace('_', ' ')|title }}</span><span class="t-age">{{ age or 'Age not reported' }}</span>
+{%- endmacro %}
+{% macro explorer(address, chain_id, kind='address') -%}
+  {% set host = {1: 'etherscan.io', 8453: 'basescan.org'}.get(chain_id|int(0)) %}
+  {% set valid = namespace(ok=address is string and address|length == (66 if kind == 'tx' else 42) and address[:2] == '0x') %}
+  {% if valid.ok %}{% for char in address[2:] %}{% if char not in '0123456789abcdefABCDEF' %}{% set valid.ok = false %}{% endif %}{% endfor %}{% endif %}
+  {% if valid.ok and host %}<a class="t-address" href="https://{{ host }}/{{ kind }}/{{ address }}" target="_blank" rel="noopener noreferrer" title="View on {{ host }} (opens a new tab)">{{ address }} <span aria-hidden="true">↗</span><span class="t-sr"> on {{ host }}, opens a new tab</span></a>{% else %}<span class="t-address">{{ value(address) }}</span>{% endif %}
+{%- endmacro %}
+{% macro pin(item) -%}
+  <div><dt>Freshness / age</dt><dd>{{ freshness(item.freshness, item.age_text) }}</dd></div>
+  <div><dt>Block</dt><dd>{{ value(item.block) }}</dd></div>
+  <div><dt>Timestamp</dt><dd>{{ value(item.utc) }}</dd></div>
+  <div><dt>Source</dt><dd>{{ value(item.source) }}</dd></div>
+{%- endmacro %}
+{% macro fork_result(gain, unit, gas) -%}
+  {% if gain|float(none) is not none %}{{ gain }} {{ unit }} owner gain (pre-gas){% else %}Gain not reported{% endif %}<br>
+  {% if gas|int(none) is not none %}{{ gas }} gas{% else %}Gas not reported{% endif %}
+{%- endmacro %}
+{% macro inventory_url(query, path, page=1, clear=false) -%}
+  {%- set params = namespace(pairs=[]) -%}
+  {%- for name, entries in request.args.lists() if name not in ['q', 'chain', 'protocol', 'source', 'status', 'sort', 'page', 'page_size'] -%}
+    {%- for entry in entries -%}{%- set params.pairs = params.pairs + [(name, entry)] -%}{%- endfor -%}
+  {%- endfor -%}
+  {%- if not clear -%}
+    {%- for name in ['q', 'chain', 'protocol', 'source', 'status', 'sort', 'page_size'] if query.get(name) is not none and query.get(name, '') != '' -%}
+      {%- set params.pairs = params.pairs + [(name, query[name])] -%}
+    {%- endfor -%}
+  {%- endif -%}
+  {%- set params.pairs = params.pairs + [('page', page)] -%}
+  {{- path -}}?{{- params.pairs|urlencode -}}
+{%- endmacro %}
+{% macro source_name(source_id, sources) -%}
+  {{- sources|selectattr('value', 'equalto', source_id)|map(attribute='label')|first|default(source_id, true) -}}
+{%- endmacro %}
+{% macro pagination(query, paging, location, path, is_inventory) -%}
+  <nav class="t-pagination" aria-label="{{ 'Historical inventory' if is_inventory else 'Trade candidate' }} pages · {{ location }}">
+    <div class="t-page-links">
+      {% if paging.has_prev %}<a href="{{ inventory_url(query, path, paging.page - 1) }}" rel="prev" data-target-nav>← Previous</a>{% else %}<span aria-disabled="true">← Previous</span>{% endif %}
+      <span class="t-current-page" aria-current="page">Page {{ value(paging.page, 1) }} of {{ value(paging.pages, 1) }}</span>
+      {% if paging.has_next %}<a href="{{ inventory_url(query, path, paging.page + 1) }}" rel="next" data-target-nav>Next →</a>{% else %}<span aria-disabled="true">Next →</span>{% endif %}
+    </div>
+    <span class="t-meta">{{ value(paging.returned, 'Unknown') }} {{ 'records' if is_inventory else 'candidates' }} on this page · {{ value(paging.page_size, 50) }} per page</span>
+  </nav>
+{%- endmacro %}
+
+{% block content %}
+{% set targets = view.targets|default([], true) %}
+{% set counts = view.summary|default({}, true) %}
+{% set runners = view.runners|default({}, true) %}
+{% set deployments = view.deployments|default({}, true) %}
+{% set evidence = view.evidence|default({}, true) %}
+{% set query = view.query|default({}, true) %}
+{% set paging = view.pagination|default({}, true) %}
+{% set options = view.options|default({}, true) %}
+{% set coverage = view.coverage|default({}, true) %}
+{% set sources = options.sources|default([], true) %}
+<div class="targets-page" data-targets-page>
+  <header class="t-hero">
+    <div><p class="eyebrow">{{ 'STORED BORROWER & MARKET INVENTORY' if is_inventory else 'CURATED BORROWER SHORTLIST' }} · READ ONLY</p><h1>{{ page_title }}<span class="t-title-dot" aria-hidden="true">.</span></h1><p class="t-lede">{% if is_inventory %}Full stored borrower and market inventory, including some current trade candidates. A historical identity is not proof of current debt or an executable trade.{% else %}Explicitly curated borrowers, including waiting, held, and observation-stage candidates. Inclusion does not establish execution readiness or profit. Historical identities and market-only observations are excluded.{% endif %}</p></div>
+    <div class="t-hero-aside"><a href="{{ inventory_url(query, api_path, paging.page|default(1)) }}" data-target-nav>View this page as JSON ↗</a><p>{% if is_inventory %}Stored records, not a trade list.<br>Not complete on-chain coverage.{% else %}Curated borrowers only.<br>Not complete market coverage.{% endif %}</p></div>
+  </header>
+
+  <section class="t-snapshot{% if view.freshness != 'FRESH' or not view.available %} t-caution{% endif %}" aria-labelledby="targets-snapshot-title">
+    <div class="t-section-head"><div><span class="eyebrow">CURATED REFERENCE</span><h2 id="targets-snapshot-title">Snapshot, not a live guarantee</h2></div><div>{{ freshness(view.freshness, view.age_text) }}</div></div>
+    <dl class="t-snapshot-facts">
+      <div><dt>Curated reference block</dt><dd>{{ value(view.pin_block, 'Unknown') }}</dd></div>
+      <div><dt>Reference block timestamp</dt><dd>{{ value(view.pin_utc, 'Unknown') }}</dd></div>
+      <div><dt>View generated</dt><dd>{{ value(view.generated_at, 'Unknown') }}</dd></div>
+    </dl>
+    <p>This reference is not a shared pin for other chains or sources. Health, quotes, and runner reports have independent pins and ages. Missing or stale evidence leaves current conditions unknown. “Eligible” is a reported trigger condition, not execution readiness.</p>
+    <p><strong>Unknown / Not reported</strong> means evidence is unavailable, not zero. <strong>Stale</strong> means older evidence is retained, not current. <strong>Not applicable</strong> marks borrower-only fields on market / vault records.</p>
+    {% if not view.available %}<p class="t-warning"><strong>No readable {{ 'inventory' if is_inventory else 'candidate' }} inputs.</strong> Coverage details below show unavailable inputs. Missing records do not mean there are no {{ 'positions' if is_inventory else 'candidates' }} or no risks.</p>{% endif %}
+    {% if view.warnings %}<ul class="t-warnings">{% for warning in view.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
+  </section>
+
+  <dl class="t-counts" aria-label="Global {{ 'stored' if is_inventory else 'candidate' }} counts, deduplicated before filtering">
+    <div><dt>{{ 'Stored records' if is_inventory else 'Candidates' }}</dt><dd>{{ value(counts.total, 'Unknown') }}</dd><span>{{ scope_label }} · deduplicated</span></div>
+    <div><dt>Reported eligible</dt><dd>{{ value(counts.eligible, 'Unknown') }}</dd><span>{{ scope_label }} · not execution approval</span></div>
+    <div><dt>Observation only</dt><dd>{{ value(counts.observation_only, 'Unknown') }}</dd><span>{{ scope_label }} · no execution inferred</span></div>
+    <div><dt>Stale {{ records_label }}</dt><dd>{{ value(counts.stale, 'Unknown') }}</dd><span>{{ scope_label }} · current condition unknown</span></div>
+  </dl>
+
+  <details class="t-secondary t-coverage" id="targets-coverage">
+    <summary><span><span class="eyebrow">{{ coverage_label }}</span><strong>{% if coverage.complete is sameas true %}{{ 'Registered' if is_inventory else 'Candidate' }} inputs read{% elif coverage.complete is sameas false %}Partial coverage{% else %}Coverage unknown{% endif %}</strong><span class="t-meta">{% if coverage.sources %}{{ coverage.sources|length }} sources consulted · inspect counts and gaps{% else %}{{ coverage_label }} has not been reported{% endif %}</span></span><span class="t-disclosure-mark" aria-hidden="true">+</span></summary>
+    <div class="t-secondary-body">
+      <p class="t-help">{% if is_inventory %}Coverage describes admitted stored inputs, not every on-chain position or current health. A historical identity alone leaves current health unknown. Source counts overlap; only inventory totals are deduplicated. This is not a timeline of past snapshots.{% else %}Coverage describes only sources consulted for this curated borrower shortlist, not every on-chain position or current health. Unread historical indexes are not counted. Source counts overlap; candidate totals are deduplicated.{% endif %}</p>
+      {% set limits = coverage.limits|default({}, true) %}
+      <p class="t-help">Maximum input ceilings: {{ value(limits.max_rows_per_source, 'Unknown') }} input rows and {{ value(limits.max_bytes_per_source, 'Unknown') }} bytes. Effective limits and upstream gaps are listed for each source below.</p>
+      <p class="t-help">Source ages are independent of “View generated”. Original timestamps, when reported, are in each record’s Stored source evidence.</p>
+      <div class="t-coverage-grid">
+        {% for source in coverage.sources|default([], true) %}
+        <article class="t-source" data-source-state="{{ source.read_state or 'UNKNOWN' }}">
+          <div class="t-section-head"><h3>{{ source.label or source.id or 'Source not reported' }}</h3><span class="pill {{ 'neutral' if source.read_state == 'OK' else 'warn' }}">{{ source.read_state or 'UNKNOWN' }}</span></div>
+          <p>{{ freshness(source.freshness, source.age_text) }}</p>
+          <dl class="t-source-counts">
+            {% for key, label in [('input_rows', 'Input rows'), ('accepted_rows', 'Accepted'), ('rejected_rows', 'Rejected'), ('omitted_rows', 'Omitted'), ('reported_total', 'Source-reported total')] %}<div><dt>{{ label }}</dt><dd>{{ value(source[key], 'Unknown') }}</dd></div>{% endfor %}
+            <div><dt>Truncated</dt><dd>{{ 'Yes' if source.truncated is sameas true else ('No' if source.truncated is sameas false else 'Unknown') }}</dd></div>
+          </dl>
+          {% if source.limitations %}<ul class="t-notes">{% for limitation in source.limitations %}<li>{{ limitation }}</li>{% endfor %}</ul>{% endif %}
+          {% if source.read_state != 'OK' %}<p class="t-help t-warning">This input is incomplete or unavailable. Missing records and unknown counts are not zero.</p>{% endif %}
+        </article>
+        {% else %}<p class="t-warning">No {{ coverage_label|lower }} details are available. An empty {{ 'inventory' if is_inventory else 'shortlist' }} does not establish that there are no positions or risks.</p>{% endfor %}
+      </div>
+    </div>
+  </details>
+
+  <aside class="t-risk" aria-label="Gain limitations"><strong>Gross quote ≠ net or realized profit.</strong> All quoted gains are <strong>pre-gas</strong>. Gas, slippage, and competition are not fully priced. Realized profit is not established by this page.</aside>
+
+  <section class="t-register" aria-labelledby="targets-register-title">
+    <div class="t-section-head"><h2 id="targets-register-title">{{ 'Stored records' if is_inventory else 'Candidates' }}</h2><span class="t-meta t-range" data-target-count role="status" aria-live="polite" aria-atomic="true">Rows {{ value(paging.start, 'Unknown') }}–{{ value(paging.end, 'Unknown') }} of {{ value(paging.filtered_total, 'Unknown') }} matching / {{ value(counts.total, 'Unknown') }} {{ records_label }}</span></div>
+    <form class="t-filters" data-target-filters action="{{ page_path }}" method="get" aria-label="Filter and sort {{ 'stored records' if is_inventory else 'trade candidates' }}" aria-describedby="targets-filter-help">
+      <input type="hidden" name="page" value="1">
+      {% for name, entries in request.args.lists() if name not in ['q', 'chain', 'protocol', 'source', 'status', 'sort', 'page', 'page_size'] %}{% for entry in entries %}<input type="hidden" name="{{ name }}" value="{{ entry }}">{% endfor %}{% endfor %}
+      <label class="t-search" for="targets-search">Search {{ 'stored records' if is_inventory else 'candidates' }}<input id="targets-search" name="q" type="search" value="{{ query.q or '' }}" maxlength="128" placeholder="Pair, account, market…" autocomplete="off" aria-controls="targets-list"></label>
+      {% for name, label, collection in [('chain', 'Chain', options.chains), ('protocol', 'Protocol', options.protocols), ('source', 'Source', sources), ('status', 'Status', options.statuses)] %}
+      <label for="targets-{{ name }}">{{ label }}<select id="targets-{{ name }}" name="{{ name }}" aria-controls="targets-list"><option value="">All {{ 'statuses' if name == 'status' else name ~ 's' }}</option>{% for option in collection|default([], true) %}<option value="{{ option.value }}"{% if query[name] == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label>
+      {% endfor %}
+      <label class="t-sort" for="targets-sort">Sort by<select id="targets-sort" name="sort" aria-controls="targets-list" aria-describedby="targets-filter-help targets-timing-help">{% for option in options.sorts|default([], true) %}<option value="{{ option.value }}"{% if query.sort == option.value %} selected{% endif %}>{{ option.label }}</option>{% else %}<option value="curated">Curated order</option>{% endfor %}</select></label>
+      {% set page_size = query.page_size|default(50) %}
+      <label for="targets-page-size">Rows per page<select id="targets-page-size" name="page_size" aria-controls="targets-list">{% for size in [25, 50, 100, 200] %}<option value="{{ size }}"{% if page_size == size %} selected{% endif %}>{{ size }}</option>{% endfor %}{% if page_size not in [25, 50, 100, 200] %}<option value="{{ page_size }}" selected>{{ page_size }}</option>{% endif %}</select></label>
+      <div class="t-filter-actions"><button type="submit">Apply</button><a href="{{ inventory_url(query, page_path, clear=true) }}" data-target-nav data-target-reset>Clear filters</a></div>
+    </form>
+    <p class="t-help" id="targets-filter-help">Apply searches and sorts the full {{ 'stored inventory' if is_inventory else 'candidate shortlist' }}, not just this page, and returns to page 1. Unknown sort values stay last. {{ scope_label }} counts above do not change with filters. Pause refresh while editing if needed.</p>
+    <p class="t-help" id="targets-timing-help">Passive time estimates assume unchanged rates and prices. They are not guaranteed countdowns to liquidation or proof of execution readiness. Unknown or unusable estimates sort last.</p>
+    {% if view.query_warnings %}<p class="t-warning">Some query values were adjusted. The controls show the applied query.</p><ul class="t-warnings">{% for warning in view.query_warnings %}<li>{{ warning.parameter }} · {{ warning.code|replace('_', ' ')|lower }}</li>{% endfor %}</ul>{% endif %}
+    <noscript><p class="t-help">Filters, page links, and record details work without JavaScript.</p></noscript>
+    {{ pagination(query, paging, 'top', page_path, is_inventory) }}
+    <div class="t-list-heading" aria-hidden="true"><span>{{ 'Record' if is_inventory else 'Candidate' }} / chain</span><span>Condition / health age</span><span>Health / timing</span><span>Gross quote · pre-gas</span><span>Runner telemetry</span><span></span></div>
+    <ul class="t-list" id="targets-list" data-target-list>
+      {% for row in targets %}
+      {% set status = row.status|default({}, true) %}
+      {% set observation = row.observation|default({}, true) %}
+      {% set quote = row.quote|default({}, true) %}
+      {% set position = row.position|default({}, true) %}
+       {% set runner = row.runner|default({}, true) %}
+       {% set historical = row.historical_reference|default({}, true) %}
+       {% set estimate = quote.estimate|default({}, true) %}
+       {% set liveness = row.liveness|default({}, true) %}
+       {% set is_paxg = 'PAXG' in (row.pair or '') %}
+        {% set is_market = row.record_type == 'market' %}
+        {% set position_fallback = 'Not applicable' if is_market else 'Not reported' %}
+       {% set row_sources = row.source_ids|default([], true) %}
+       {% set quoted = quote.available and not is_paxg %}
+       {% set estimated = row.health_is_estimate or position.is_estimate %}
+       <li data-target-row data-status="{{ status.code or 'UNKNOWN' }}">
+         <details class="t-target" id="target-{{ row.position_key }}">
+          <summary>
+             <span class="t-identity"><span class="t-rank">{{ row.rank or '—' }} <span>{{ row.chain_name or 'Chain unknown' }}</span></span><strong>{{ row.pair or row.label or 'Unnamed target' }}</strong><span class="t-meta">{{ row.protocol or 'Protocol unknown' }}</span><span class="t-meta">{{ 'Market / vault observation' if is_market else ('Account ' ~ (row.user_short or 'not reported')) }}</span><span class="t-provenance">{% if row_sources %}Source{% if row_sources|length != 1 %}s{% endif %}: {% for source_id in row_sources[:2] %}{{ source_name(source_id, sources) }}{% if not loop.last %} · {% endif %}{% endfor %}{% if row_sources|length > 2 %} · +{{ row_sources|length - 2 }} more{% endif %}{% else %}Source not reported{% endif %}</span></span>
+             <span class="t-cell"><span class="t-mobile-label">Condition / health age</span><span class="pill {{ 't-held' if status.code == 'HELD' else {'positive': 'clear', 'warning': 'warn', 'critical': 'critical'}.get(status.tone, 'neutral') }}">{{ status.label or 'Unknown' }}</span>{% if status.code == 'HELD' or runner.held is sameas true %}<span class="t-meta">Protocol: {{ (row.protocol_status or 'UNKNOWN')|replace('_', ' ')|title }}</span>{% endif %}<span class="t-meta">{{ (observation.freshness or 'UNKNOWN')|replace('_', ' ')|title }} · {{ observation.age_text or 'Age not reported' }}</span>{% if row.observation_only and status.code != 'OBSERVATION_ONLY' %}<span class="t-meta">Observation only</span>{% endif %}</span>
+             <span class="t-cell t-metric"><span class="t-mobile-label">Health / timing</span><span><span class="t-meta">HF </span>{{ value(row.health_factor, position_fallback)|replace(' HF', '') }}</span><span class="t-meta">{{ amount(row.bps_numeric, 'bps', 'Not applicable' if is_market else 'Unknown bps') }}</span>{% if estimated %}<span class="t-estimate">Approximate</span>{% endif %}<span class="t-meta" aria-describedby="targets-timing-help">Passive est. · {{ amount(position.passive_hours, 'h', position_fallback) }}</span></span>
+             <span class="t-cell t-metric"><span class="t-mobile-label">Current gross quote · pre-gas</span>{% if quoted %}{% if quote.gross_token_amount is defined and quote.gross_token_amount is not none %}<strong>{{ amount(quote.gross_token_amount, quote.gross_token_symbol) }}</strong>{% if quote.gross_usd is defined and quote.gross_usd is not none %}<span class="t-meta">{{ quote.gross_usd }} USD</span>{% endif %}{% elif quote.gross_usd is defined and quote.gross_usd is not none %}<strong>{{ quote.gross_usd }} USD</strong>{% else %}<span>Not reported</span>{% endif %}<span class="t-meta">{{ (quote.freshness or 'UNKNOWN')|replace('_', ' ')|title }} quote · block {{ value(quote.block, '?') }}</span>{% else %}<span>Current quote unavailable</span>{% if quote.freshness == 'STALE' %}<span class="t-meta">Stale quote · block {{ value(quote.block, '?') }}</span>{% endif %}{% if historical.available %}<strong>${{ historical.modeled_net_usd_display }} modeled net</strong><span class="t-meta">Historical local fork · block {{ historical.original_block }} · not earned</span>{% elif estimate %}<span class="t-meta">{% if estimate.gross_token_amount is not none %}{{ amount(estimate.gross_token_amount, estimate.gross_token_symbol) }}{% elif estimate.gross_usd is not none %}{{ estimate.gross_usd }} USD{% endif %} · stored estimate, not earned</span>{% else %}<span class="t-meta">{{ 'Liquidity ≠ profit' if is_paxg else 'No valid quote' }}</span>{% endif %}{% endif %}</span>
+              <span class="t-cell"><span class="t-mobile-label">Runner evidence</span><span>Observed: {{ (liveness.state or 'UNKNOWN')|title }}</span>{% if runner.held is sameas true %}<span class="t-hold-label">Hold reported</span>{% endif %}<span class="t-meta">Reported mode: {{ runner.mode or 'Unknown' }}</span><span class="t-meta">{{ runner.label or 'Runner not reported' }}</span><span class="t-meta">Report: {{ (runner.freshness or 'UNKNOWN')|replace('_', ' ')|title }} · {{ runner.age_text or 'Age not reported' }}</span>{% if runner.reason_text %}<span class="t-meta">{{ runner.reason_text }}</span>{% endif %}</span>
+              <span class="t-expand" aria-hidden="true">+</span><span class="t-sr">Expand {{ 'record' if is_inventory else 'candidate' }} details</span>
+          </summary>
+          <div class="t-target-body">
+              <p class="t-record-title">{{ row.label or row.pair or ('Record details' if is_inventory else 'Candidate details') }}</p>
+            <div class="t-detail-grid">
+              <section><h3>Identity &amp; scope</h3><dl class="t-facts">
+                 <div><dt>Record type</dt><dd>{{ 'Market / vault observation' if is_market else 'Position record' }}</dd></div>
+                 <div><dt>Account / borrower</dt><dd>{% if is_market %}Not applicable · market / vault record{% else %}{{ explorer(row.borrower_address, row.chain_id) }}{% endif %}</dd></div>
+                <div><dt>Venue / pool / spoke</dt><dd>{{ explorer(row.venue_address, row.chain_id) }}</dd></div>
+                <div><dt>Market ID</dt><dd class="t-address">{{ value(row.market_id) }}</dd></div>
+                 <div><dt>Configured implementation</dt><dd>{{ explorer(row.executor_address, row.chain_id) }}</dd></div>
+                <div><dt>Chain</dt><dd>{{ row.chain_name or 'Unknown' }} · ID {{ value(row.chain_id, 'unknown') }}</dd></div>
+              </dl></section>
+              <section><h3>Position &amp; timing{% if position.is_estimate %} · estimates{% endif %}</h3><dl class="t-facts">
+                <div><dt>Debt{% if position.is_estimate %} (estimated){% endif %}</dt><dd>{{ amount(position.debt_amount, position.debt_symbol, position_fallback) }}</dd></div>
+                <div><dt>Collateral{% if position.is_estimate %} (estimated value){% endif %}</dt><dd>{{ amount(position.collateral_amount, position.collateral_symbol, position_fallback) }}</dd></div>
+                <div><dt>Borrow APR</dt><dd>{{ amount(position.borrow_apr_pct, '%') }}</dd></div>
+                <div><dt>Passive crossing estimate</dt><dd>{{ amount(position.passive_hours, 'hours', position_fallback) }}</dd></div>
+                <div><dt>Heartbeat estimate</dt><dd>{{ amount(position.heartbeat_hours, 'hours') }}</dd></div>
+                {% if is_paxg %}<div><dt>Reported market liquidity · not gain</dt><dd>{{ value(row.heartbeat_hours_left) }}</dd></div>{% endif %}
+              </dl><p class="t-help">Passive timing assumes unchanged rates and prices; it is not a countdown to a guaranteed opportunity.{% if estimated %} Health and distance are approximate; check the source limitations below.{% endif %}</p></section>
+               <section><h3>Health observation</h3><dl class="t-facts">
+                 <div><dt>Protocol condition · separate from runner holds</dt><dd>{{ (row.protocol_status or 'UNKNOWN')|replace('_', ' ')|title }}</dd></div>
+                <div><dt>Health factor{% if estimated %} (approximate){% endif %}</dt><dd>{{ value(row.health_factor, position_fallback)|replace(' HF', '') }}</dd></div>
+                <div><dt>Distance{% if estimated %} (approximate){% endif %}</dt><dd>{{ amount(row.bps_numeric, 'bps', position_fallback) }}</dd></div>
+                {{ pin(observation) }}
+                <div><dt>Block hash</dt><dd class="t-address">{{ value(observation.hash) }}</dd></div>
+              </dl></section>
+              <section><h3>Current gross quote · pre-gas</h3>{% if quoted %}<dl class="t-facts">
+                <div><dt>Gross token gain</dt><dd>{{ amount(quote.gross_token_amount, quote.gross_token_symbol) }}</dd></div>
+                <div><dt>Reported USD value</dt><dd>{{ amount(quote.gross_usd, 'USD') }}</dd></div>
+                <div><dt>Repay</dt><dd>{{ amount(quote.repay_amount, quote.repay_symbol) }}</dd></div>
+                <div><dt>Seize</dt><dd>{{ amount(quote.seize_amount, quote.seize_symbol) }}</dd></div>
+                {{ pin(quote) }}
+              </dl>{% else %}<p class="t-help">No valid gain quote is available. {% if is_paxg %}Available PAXG-market liquidity is not profit.{% else %}Debt and collateral are not repayment or seizure quotes.{% endif %}</p><dl class="t-facts">{{ pin(quote) }}</dl>{% endif %}
+              {% if quote.notes %}<ul class="t-notes">{% for note in quote.notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}<p class="t-help">Token amounts are not USD prices. A quote at an earlier block is not refreshed by a newer health check.</p></section>
+              {% if estimate and not historical.available %}<section><h3>Stored estimate · not a current quote</h3><dl class="t-facts">
+                <div><dt>Reported gross token estimate</dt><dd>{{ amount(estimate.gross_token_amount, estimate.gross_token_symbol) }}</dd></div>
+                <div><dt>Reported USD estimate</dt><dd>{{ amount(estimate.gross_usd, 'USD') }}</dd></div>
+                <div><dt>Provenance</dt><dd>{{ estimate.provenance or 'UNKNOWN' }}</dd></div>
+                <div><dt>Original block / time</dt><dd>{{ value(estimate.block, 'Unknown') }} / {{ value(estimate.utc, 'Unknown') }}</dd></div>
+              </dl><p class="t-help">Not actionable, not earned, and excluded from current-quote gain sorting.</p></section>{% endif %}
+              {% if historical %}<section aria-label="Historical local-fork reference"><h3>Historical reference · not a current quote</h3>
+                {% if historical.available %}<p><strong>${{ historical.modeled_net_usd_display }} modeled net · historical local fork</strong></p>
+                <dl class="t-facts">
+                  <div><dt>Modeled net · exact USD</dt><dd>${{ historical.modeled_net_usd }}</dd></div>
+                  <div><dt>Report started</dt><dd>{{ historical.started_at }}</dd></div>
+                  <div><dt>Report completed</dt><dd>{{ historical.completed_at }}</dd></div>
+                  <div><dt>Local interest fixture</dt><dd>+12 hours ({{ historical.fixture_advance_seconds }} seconds)</dd></div>
+                  <div><dt>Original Ethereum block</dt><dd>{{ historical.original_block }}</dd></div>
+                  <div><dt>Original block time</dt><dd>{{ historical.original_utc }}</dd></div>
+                  <div><dt>Original block hash</dt><dd class="t-address">{{ historical.original_hash }}</dd></div>
+                </dl>{% endif %}
+                <p class="t-help">{{ historical.note }}</p><dl class="t-facts"><div><dt>Source artifact</dt><dd class="t-address">{{ historical.source_artifact }}</dd></div></dl>
+              </section>{% endif %}
+              <section><h3>Runner report · separate telemetry</h3><dl class="t-facts">
+                <div><dt>Observed liveness</dt><dd>{{ (liveness.state or 'UNKNOWN')|title }}</dd></div>
+                <div><dt>Process observation time</dt><dd>{{ value(liveness.observed_at, 'Unknown') }}</dd></div>
+                <div><dt>Runner / mode</dt><dd>{{ runner.label or 'Not reported' }} / {{ runner.mode or 'Not reported' }}</dd></div>
+                <div><dt>Freshness / age</dt><dd>{{ freshness(runner.freshness, runner.age_text) }}</dd></div>
+                 <div><dt>Last checked</dt><dd>{{ value(runner.checked_at) }}</dd></div>
+                 <div><dt>Runner hold</dt><dd>{{ 'Hold reported · see blockers and telemetry age' if runner.held is sameas true else ('No hold reported · not execution approval' if runner.held is sameas false else 'Unknown') }}</dd></div>
+                <div><dt>Reported armed</dt><dd>{{ 'Yes · telemetry only' if runner.reported_armed is sameas true else ('No · telemetry only' if runner.reported_armed is sameas false else 'Unknown') }}</dd></div>
+                <div><dt>Target armed</dt><dd>{{ 'Yes · not execution approval' if row.armed is sameas true else ('No' if row.armed is sameas false else 'Unknown · not asserted') }}</dd></div>
+                <div><dt>Calldata shape</dt><dd>{{ 'Encoded only; execution not proven' if row.calldata_ready is sameas true else 'Not established' }}</dd></div>
+               </dl>{% if runner.notes %}<ul class="t-notes">{% for note in runner.notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}<p class="t-help">A reported mode or armed flag does not establish authorization, broadcast, or inclusion. Unknown does not mean stopped. Read-only sentinel health is not executor liveness.</p></section>
+              <section><h3>Realized receipt</h3><p class="t-help">No target-bound realized-profit receipt is established by this page. Estimates and historical rehearsals are not earned gains.</p></section>
+              {% if row.rank in ['#M7', '#M7B', '#E4'] and row.buffer_capacity is mapping %}
+              {% set capacity = row.buffer_capacity %}
+              {% set capacity_observation = capacity.observation|default({}, true) %}
+              {% set capacity_known = capacity.available is sameas true and capacity.read_status == 'OK' and capacity.amount is string and capacity.amount != '' %}
+              {% set capacity_read_status = capacity.read_status if capacity.read_status in ['OK', 'READ_FAILED', 'UNKNOWN'] else 'UNKNOWN' %}
+              <section data-buffer-capacity="{{ row.rank }}" aria-labelledby="capacity-{{ row.position_key }}">
+                <h3 id="capacity-{{ row.position_key }}">Recorded buffer withdrawal limit</h3>
+                <p class="t-metric"><strong data-capacity-amount>{% if capacity_known %}{{ capacity.amount }} WETH{% else %}Unknown{% endif %}</strong></p>
+                <dl class="t-facts">
+                  <div><dt>Recorded read</dt><dd><span class="pill {{ 'neutral' if capacity_known else 'unknown' }}">{{ capacity_read_status|replace('_', ' ') }}</span></dd></div>
+                  <div><dt>Source freshness</dt><dd>{{ freshness(capacity_observation.freshness if capacity_known else 'UNKNOWN', capacity_observation.age_text if capacity_known else none) }}</dd></div>
+                  <div><dt>Block</dt><dd>{{ value(capacity_observation.block, 'Unknown') }}</dd></div>
+                  <div><dt>Timestamp</dt><dd>{{ value(capacity_observation.utc, 'Unknown') }}</dd></div>
+                  <div><dt>Source</dt><dd>{{ value(capacity_observation.source, 'Not reported') }}</dd></div>
+                  <div><dt>Block hash</dt><dd class="t-address">{{ value(capacity_observation.hash, 'Not reported') }}</dd></div>
+                </dl>
+                {% if not capacity_known %}<p class="t-help t-warning">Capacity is unknown; the read is missing, failed, or incomplete.</p>{% endif %}
+                <p class="t-help">Observed MCwETH max-withdraw limit for the ynETHx holder; not global cash or NAV and not additive across these targets. Outer-vault and owner-specific restrictions remain separate. Read success does not change the blockers or execution permissions.</p>
+                {% if capacity.legacy_shares is defined and capacity.legacy_shares is not none %}<p class="t-help"><strong>MCwETH shares (rounded source value):</strong> {{ capacity.legacy_shares }}<br>Rounded to six decimals; zero does not prove the actual share balance is zero.</p>{% endif %}
+              </section>
+              {% endif %}
+                <section class="t-source-evidence"><h3>Stored source evidence</h3><p class="t-help">Sources can describe the same identity at different times. A recent source does not refresh an older health check, quote, or runner hold.</p>
+                 {% for item in row.provenance|default([], true) %}<div class="t-provenance-record"><h4>{{ source_name(item.source, sources) or 'Source not reported' }}</h4><dl class="t-facts t-two-facts"><div><dt>Source generated</dt><dd>{{ value(item.generated_at) }}</dd></div>{{ pin(item) }}<div><dt>Block hash</dt><dd class="t-address">{{ value(item.hash) }}</dd></div></dl></div>{% else %}<p class="t-help">Source timestamps and pins not reported.</p>{% endfor %}
+               </section>
+              <section class="t-blockers"><h3>Blockers &amp; limits</h3>{% if row.blockers %}<ul class="t-notes">{% for blocker in row.blockers %}<li>{{ blocker }}</li>{% endfor %}</ul>{% else %}<p class="t-help">No blockers reported. This does not establish execution readiness.</p>{% endif %}{% if row.readiness_note %}<p class="t-help">{{ row.readiness_note }}</p>{% endif %}<p class="t-help">No signing, arming, or execution controls are available on this page.</p></section>
+            </div>
+          </div>
+        </details>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if not targets %}<div class="t-empty" data-target-empty><h3>{% if counts.total|default(0, true) > 0 %}No matching {{ 'stored records' if is_inventory else 'candidates' }}{% else %}No {{ 'stored' if is_inventory else 'candidate' }} records available{% endif %}</h3><p>{% if counts.total|default(0, true) > 0 %}Try a different search or <a href="{{ inventory_url(query, page_path, clear=true) }}" data-target-nav>clear the filters</a>. Other {{ records_label }} are still in the {{ 'inventory' if is_inventory else 'shortlist' }}.{% else %}Inputs may be empty, missing, or invalid. Check {{ coverage_label|lower }} above; no current conditions or gains are inferred.{% endif %}</p></div>{% endif %}
+    {{ pagination(query, paging, 'bottom', page_path, is_inventory) }}
+    <p class="t-refresh"><span data-refresh-status aria-live="polite">Automatic refresh every 60 seconds.</span><span>60-second refresh · pauses in hidden tabs · applied filters and page stay in the URL</span></p>
+  </section>
+
+  <details class="t-secondary" id="targets-runners">
+    <summary><span><span class="eyebrow">OPERATIONAL EVIDENCE</span><strong>Runners &amp; deployment receipts</strong></span><span class="t-disclosure-mark" aria-hidden="true">+</span></summary>
+    <div class="t-secondary-body"><p class="t-help">These are recorded reports, not process inspection or execution approval. Deployment does not establish readiness. <a href="/jobs">View process observations</a>.</p>
+      <div class="t-card-grid">
+        {% for runner_key, deploy_key, title in [('v3', 'unified', 'Unified V3 / V4 executor'), ('v4', 'v4', 'Dedicated Aave V4 executor')] %}
+        {% set watch = runners[runner_key]|default({}, true) %}{% set deploy = deployments[deploy_key]|default({}, true) %}
+        <article class="t-card"><h3>{{ title }}</h3><p>{{ freshness(watch.freshness, watch.age_text) }}</p>
+          {% if watch.available %}<dl class="t-facts t-two-facts">
+            <div><dt>Mode</dt><dd>{{ value(watch.mode) }}</dd></div>
+            {% if runner_key == 'v3' %}<div><dt>Partition</dt><dd>{{ value(watch.partition) }}</dd></div><div><dt>Eligible candidates (reported)</dt><dd>{{ value(watch.candidate_count) }}</dd></div>{% else %}<div><dt>Fired count (reported)</dt><dd>{{ value(watch.fired_count) }}</dd></div>{% endif %}
+            <div><dt>Checked block</dt><dd>{{ value(watch.block_number) }}</dd></div><div><dt>Checked at</dt><dd>{{ value(watch.checked_at) }}</dd></div>
+          </dl>{% else %}<p class="t-help">Runner snapshot unavailable or invalid. Current runner state is unknown.</p>{% endif %}
+          <h4>Deployment receipt</h4>
+          {% if deploy.available %}<dl class="t-facts">
+            <div><dt>Contract · Ethereum</dt><dd>{{ explorer(deploy.contract_address, 1) }}</dd></div>
+            <div><dt>Transaction</dt><dd>{{ explorer(deploy.tx_hash, 1, 'tx') }}</dd></div>
+            <div><dt>Block / recorded at</dt><dd>{{ value(deploy.block_number) }} / {{ value(deploy.deployed_at) }}</dd></div>
+            <div><dt>Gas / actual fee</dt><dd>{{ amount(deploy.gas_used, 'gas') }} / {{ amount(deploy.actual_fee_eth, 'ETH') }}</dd></div>
+            <div><dt>Code size / reported owner</dt><dd>{{ amount(deploy.code_bytes, 'bytes') }} / {{ value(deploy.owner) }}</dd></div>
+            {% if deploy_key == 'v4' %}<div><dt>Two-provider verification</dt><dd>{{ 'Reported verified' if deploy.two_provider_verified else 'Not confirmed' }}</dd></div>{% endif %}
+          </dl>{% else %}<p class="t-help">Deployment receipt unavailable or invalid.</p>{% endif %}
+        </article>{% endfor %}
+      </div>
+    </div>
+  </details>
+
+  <details class="t-secondary" id="targets-fork-evidence">
+    <summary><span><span class="eyebrow">HISTORICAL · CONDITIONAL · NOT CURRENT QUOTES</span><strong>Local-fork rehearsal evidence</strong></span><span class="t-disclosure-mark" aria-hidden="true">+</span></summary>
+    <div class="t-secondary-body"><p class="t-help">Historical owner-token gains before network gas, under the rehearsal's conditions. These results do not establish current eligibility, executable net profit, or realized mainnet profit.</p>
+      <div class="t-card-grid">
+        {% set v4 = evidence.v4|default({}, true) %}{% set base = evidence.base|default({}, true) %}
+        <article class="t-card"><h3>Aave V4 · multi-spoke</h3>{% if v4.available %}<p class="t-help">Fork block {{ value(v4.pin_block, 'not reported') }}</p><dl class="t-facts"><div><dt>Spoke A · USDe / USDC</dt><dd>{{ fork_result(v4.spoke_a_gain_usdc, 'USDC', v4.spoke_a_gas) }}</dd></div><div><dt>Spoke C · weETH / WETH</dt><dd>{{ fork_result(v4.spoke_c_gain_weth, 'WETH', v4.spoke_c_gas) }}{% if v4.spoke_c_gain_usd|float(none) is not none %}<br>{{ v4.spoke_c_gain_usd }} USD (reported estimate){% endif %}</dd></div></dl>{% else %}<p class="t-help">Multi-spoke fork rehearsal unavailable or invalid.</p>{% endif %}</article>
+        <article class="t-card"><h3>Base Morpho · USDe / USDC</h3>{% if base.available %}<p class="t-help">680k USDe partial liquidation · fork block {{ value(base.pin_block, 'not reported') }}{% if base.deploy_gas %} · staged deployment {{ base.deploy_gas }} gas{% endif %}</p><dl class="t-facts"><div><dt>#B1 · 0xb4fb…59c1</dt><dd>{{ fork_result(base.b1_gain_usdc, 'USDC', base.b1_gas) }}</dd></div><div><dt>#B2 · 0x7bee…0fab</dt><dd>{{ fork_result(base.b2_gain_usdc, 'USDC', base.b2_gas) }}</dd></div></dl><p class="t-help">A conditional fork rehearsal does not establish current borrower health or a mainnet deployment.</p>{% else %}<p class="t-help">Base USDe/USDC fork rehearsal unavailable or invalid.</p>{% endif %}</article>
+      </div>
+    </div>
+  </details>
+</div>
+{% endblock %}

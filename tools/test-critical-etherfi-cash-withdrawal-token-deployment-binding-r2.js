@@ -1,0 +1,38 @@
+#!/usr/bin/env node
+"use strict";
+
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const ROOT = path.resolve(__dirname, "..");
+const NAME = "critical-etherfi-cash-withdrawal-token-deployment-binding-r2";
+const RAW = `reports/raw/fast/${NAME}.json`;
+const MANIFEST = `reports/raw/fast/${NAME}-manifest.json`;
+const CLASSIFICATION = "INFORMATIONAL/WATCH/REVIEWER-R2/DIRECT-TOKEN-TRANSFER-BEHAVIOR-ONLY/CASHMODULE-SETTERS-SOURCE-RUNTIME-OPEN/NO-INCOMPLETE-DELIVERY-OBSERVED/NO-ATTACKER-GAIN/FIXED-PIN";
+const abs = (rel) => path.join(ROOT, rel);
+const sha = (data) => crypto.createHash("sha256").update(data).digest("hex");
+const check = (ok, message) => { if (!ok) throw new Error(message); };
+const hashFile = (rel) => { const data = fs.readFileSync(abs(rel)); return { path: rel, bytes: data.length, sha256: sha(data) }; };
+const raw = JSON.parse(fs.readFileSync(abs(RAW), "utf8"));
+const manifest = JSON.parse(fs.readFileSync(abs(MANIFEST), "utf8"));
+check(raw.classification === CLASSIFICATION, "classification drift");
+check(raw.predecessors.deploymentR1.verifiedManifestAggregateSha256 && raw.predecessors.correctedSourceR2.verifiedManifestAggregateSha256, "predecessor binding absent");
+check(raw.reviewerCorrection.directTokenBehaviorOnly && !raw.reviewerCorrection.deployedWithdrawalStateMachineSemanticsClaimed && !raw.reviewerCorrection.deployedProcessWithdrawalDeletionOrderingClaimed && !raw.reviewerCorrection.deployedOptionalReturnConsumptionClaimed && !raw.reviewerCorrection.deployedSentinelRecipientBehaviorClaimed, "scope correction drift");
+check(raw.retainedFixedPinEvidence.pin.chainId === 10 && raw.retainedFixedPinEvidence.pin.finalized && raw.retainedFixedPinEvidence.providerCoverage.exactDecodedStateFamilyCount === 2, "retained fixed pin invalid");
+check(raw.retainedFixedPinEvidence.terminalRecheck.every((row) => row.sameNumberHashMatch), "retained terminal recheck invalid");
+check(!raw.retainedFixedPinEvidence.runtimeSourceContinuity.cashModuleCoreExactRuntime && !raw.retainedFixedPinEvidence.runtimeSourceContinuity.cashModuleSettersExactRuntime && !raw.retainedFixedPinEvidence.runtimeSourceContinuity.allMetadataNormalizedRuntimeContinuity, "runtime blocker drift");
+check(raw.directTokenBehavior.configuredTokenCount === 20 && raw.directTokenBehavior.tokens.length === 20, "token count drift");
+check(raw.directTokenBehavior.summary.standardBoolExactCount === 20 && raw.directTokenBehavior.summary.noReturnExactCount === 0 && raw.directTokenBehavior.summary.falseReturnObservedCount === 0 && raw.directTokenBehavior.summary.feeOrPartialObservedCount === 0 && raw.directTokenBehavior.summary.behaviorUnresolvedCount === 0, "direct token summary drift");
+check(raw.directTokenBehavior.tokens.every((token) => token.behavior.classification === "standard-bool-return-exact-on-tested-paths" && token.behavior.attackerGainRaw === "0"), "token behavior row drift");
+check(raw.directTokenBehavior.inheritedForkTests.passCount === 5 && raw.directTokenBehavior.inheritedForkTests.totalBehaviorProbeCount === 60 && !raw.directTokenBehavior.inheritedForkTests.rerunInR2, "inherited fork scope drift");
+check(raw.directTokenBehavior.doesNotProve.includes("deployed CashModule request validation") && raw.directTokenBehavior.doesNotProve.includes("deployed Solady sentinel rejection"), "negative scope caveat missing");
+check(raw.correctedSourceContext.localExactSourceTests === "30/30" && raw.correctedSourceContext.sentinelRegressionLocalOnly && !raw.correctedSourceContext.deployedJoinEstablished, "source context drift");
+check(raw.selfChecks.passed === 18 && Object.values(raw.selfChecks.checks).every(Boolean), "offline self-check drift");
+check(raw.conclusion.branchPipeline === "0/5_DEPLOYED-WITHDRAWAL-STATE-MACHINE-UNBOUND_DIRECT-TOKEN-BEHAVIOR-GATE-NEGATIVE" && raw.conclusion.extractionPipeline === "0/5_NO_ATTACKER_VALUE_PATH", "pipeline drift");
+check(raw.conclusion.globalHighestPipeline === "DebtManager donation 2/5 WATCH unchanged" && !raw.conclusion.advances && raw.conclusion.routePositive === 0 && raw.conclusion.executableNow === 0 && !raw.conclusion.signedActionJustified, "global gate drift");
+check(raw.safety.offlineReviewerSuccessor && !raw.safety.networkRerun && !raw.safety.rpcInventoryRead && !raw.safety.forkRerun && !raw.safety.liveTransactions && !raw.safety.signedActions && !raw.safety.productionMutation, "safety drift");
+check(!/https?:\/\//i.test(JSON.stringify(raw)) && !/https?:\/\//i.test(JSON.stringify(manifest)), "endpoint leak");
+const current = manifest.records.map((record) => { const row = hashFile(record.path); check(row.bytes === record.bytes && row.sha256 === record.sha256, `manifest drift: ${record.path}`); return row; });
+const aggregate = sha(current.map((row) => `${row.path}\0${row.bytes}\0${row.sha256}`).join("\n"));
+check(aggregate === manifest.aggregateSha256 && manifest.runId === raw.runId, "manifest aggregate/run drift");
+console.log(JSON.stringify({ ok: true, validations: 18, runId: raw.runId, classification: raw.classification, retainedPin: raw.retainedFixedPinEvidence.pin, tokenCount: raw.directTokenBehavior.tokens.length, behaviorProbes: raw.directTokenBehavior.inheritedForkTests.totalBehaviorProbeCount, sourceR2Tests: raw.correctedSourceContext.localExactSourceTests, networkRerun: false, forkRerun: false, branchPipeline: raw.conclusion.branchPipeline, globalHighestPipeline: raw.conclusion.globalHighestPipeline, manifestAggregateSha256: aggregate }, null, 2));

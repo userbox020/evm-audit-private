@@ -1,0 +1,30 @@
+{
+  "type": "commonjs",
+  "scripts": {
+    "test": "node test/aggregate-runner.js",
+    "test:explorer-source-fetch": "node --test test-explorer-source-fetch.js",
+    "test:monitor": "node --test test/endpoint-safety.test.js test/monitor-alert-lifecycle.test.js test/monitor-artifact-freshness.test.js test/monitor-e25.test.js test/monitor-registry.test.js test/monitor-safety.test.js test/monitor-supervisor.test.js test/monitor-transitive-safety.test.js test/monitor-ws-resolver.test.js test/monitor-rearm-upgrade-config.test.js test/monitor-oracle-divergence.test.js test/canary-strike-eligibility.test.js test/check-paxg-funding-call.test.js test/paxg-exact-actions.test.js test/run-fork-poc-bounded-gas.test.js test/morpho-find-liquidatable.test.js",
+    "test:stage1": "node --test test/ethereum-top-trades-7d-reconstruction-morpho-stage1.test.js",
+    "test:stage2a": "node --test test/ethereum-top-trades-7d-reconstruction-morpho-stage2a.test.js",
+    "test:stage2b-apxusd": "node --test test/ethereum-top-trades-7d-reconstruction-morpho-stage2b-apxusd.test.js",
+    "test:stage2c-v4-claims": "node --test test/ethereum-top-trades-7d-reconstruction-morpho-stage2c-v4-claims.test.js",
+    "test:gate0-v4-native-claim": "node --test test/ethereum-top-trades-7d-reconstruction-v4-native-claim-gate0.test.js",
+    "test:gate0-offline-adjudicator": "node --test test/ethereum-top-trades-7d-reconstruction-v4-native-claim-gate0-offline-adjudicator.test.js",
+    "test:gate0-residual-receipts": "node --test test/ethereum-top-trades-7d-reconstruction-residual-receipt-conservation-gate0.test.js",
+    "test:lido-nest-stage-a1": "node --test test/lido-nest-bootstrap-gate1-stage-a1.test.js",
+    "test:lido-nest-stage-a2": "node --test test/lido-nest-bootstrap-gate2-stage-a2.test.js",
+    "test:lido-nest-stage-a3": "node --test test/lido-nest-bootstrap-gate3-stage-a3.test.js",
+    "test:lido-nest-stage-a4": "node --test test/lido-nest-bootstrap-gate4-stage-a4.test.js",
+    "test:public-mev-stage0": "node --test test/ethereum-top-trades-7d-reconstruction-public-mev-stage0.test.js",
+    "test:public-mev-stage1-deep-source": "node --test test/ethereum-top-trades-7d-reconstruction-public-mev-stage1-deep-source.test.js",
+    "test:public-mev-stage2-identity": "node --test test/ethereum-top-trades-7d-reconstruction-public-mev-stage2-identity.test.js",
+    "preflight:public-mev-stage0": "node atomic/ethereum-top-trades-7d-reconstruction/public-mev-import.js --preflight-only",
+    "preflight:public-mev-stage1-deep-source": "node atomic/ethereum-top-trades-7d-reconstruction/public-mev-stage1-deep-source-binder.js --preflight-only",
+    "preflight:public-mev-stage2-identity": "node atomic/ethereum-top-trades-7d-reconstruction/public-mev-stage2-identity-gate.js --preflight-only",
+    "preflight:lido-nest-stage-a4": "node atomic/lido-nest-bootstrap-gate4/index.js --preflight-only",
+    "validate:lido-nest-stage-a4": "node atomic/lido-nest-bootstrap-gate4/validator.js --bundle-dir"
+  },
+  "dependencies": {
+    "ethers": "6.17.0"
+  }
+}

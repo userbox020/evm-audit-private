@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+"use strict";
+
+const assert = require("assert");
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+
+const ROOT = path.resolve(__dirname, "..");
+const NAME = "critical-etherfi-behype-destination-fee-amplification-step1";
+const RAW = `reports/raw/fast/${NAME}.json`;
+const MANIFEST = `reports/raw/fast/${NAME}-manifest.json`;
+const REPORT = `reports/${NAME}.md`;
+const INBOX = `coordination/inbox/critical/2026-07-23-${NAME}.json`;
+const HANDOFF = `coordination/handoffs/2026-07-23-${NAME}-handoff.md`;
+const SOL_TEST = "targets/cash-v3/test/critical/BeHYPEDestinationFeeAmplificationStep1.t.sol";
+const REVISION = "behype-destination-fee-amplification-step1-local-model-r1";
+const abs = (x) => path.join(ROOT, x);
+const hash = (x) => crypto.createHash("sha256").update(x).digest("hex");
+
+const rawText = fs.readFileSync(abs(RAW), "utf8");
+const raw = JSON.parse(rawText);
+const manifestText = fs.readFileSync(abs(MANIFEST), "utf8");
+const manifest = JSON.parse(manifestText);
+const report = fs.readFileSync(abs(REPORT), "utf8");
+const inboxText = fs.readFileSync(abs(INBOX), "utf8");
+const inbox = JSON.parse(inboxText);
+const handoff = fs.readFileSync(abs(HANDOFF), "utf8");
+const sol = fs.readFileSync(abs(SOL_TEST), "utf8");
+
+assert.strictEqual(raw.revision, REVISION);
+assert.strictEqual(raw.classification, "WATCH/MODEL-PRIMITIVE-CANDIDATE/PERMISSIONLESS-SHARED-DESTINATION-FEE-DEPLETION/PRODUCTION-BINDINGS-INCOMPLETE");
+assert.deepStrictEqual(raw.pipeline, { stage: 0, totalStages: 5, primitiveEstablishedForProduction: false });
+assert.strictEqual(raw.routePositive, 0);
+assert.strictEqual(raw.executableNow, 0);
+assert.strictEqual(raw.signedActionJustified, false);
+assert.strictEqual(raw.fork, false);
+for (const [k, v] of Object.entries(raw.safety)) {
+  if (k === "localOnly") assert.strictEqual(v, true, k);
+  else assert.strictEqual(v, false, k);
+}
+assert.strictEqual(raw.exactSource.commit, "247faab2206cb651e2e81b2331404eed841145b8");
+assert.strictEqual(raw.exactSource.exactBodiesPresent.length, 0);
+for (const [k, v] of Object.entries(raw.exactSource.facts)) assert.strictEqual(v, true, k);
+assert.strictEqual(raw.artifactAttested.sourceBodiesRetainedLocally, false);
+for (const [k, v] of Object.entries(raw.artifactAttested.facts)) assert.strictEqual(v, true, k);
+assert.strictEqual(raw.sourceConfidence.exactReviewedSource.confidence, "HIGH");
+assert.strictEqual(raw.sourceConfidence.predecessorSourceRuntimeAttestation.confidence, "MEDIUM");
+assert.strictEqual(raw.sourceConfidence.interfaceAbiArtifactFacts.confidence, "MEDIUM");
+assert.strictEqual(raw.sourceConfidence.localModel.confidence, "MODEL-ONLY");
+assert.strictEqual(raw.sourceConfidence.localModel.deploymentEquivalence, false);
+assert(raw.modelAssumptions.length >= 6);
+assert.strictEqual(raw.localHarness.productionDeploymentEquivalence, false);
+assert.strictEqual(raw.localHarness.safeReferencePolicy, true);
+assert.strictEqual(raw.foundry.offline, true);
+assert.strictEqual(raw.foundry.build.exitStatus, 0);
+assert.strictEqual(raw.foundry.firstRun.exitStatus, 0);
+assert.strictEqual(raw.foundry.replayRun.exitStatus, 0);
+assert.strictEqual(raw.foundry.fuzzRunsPerFuzzTest, 256);
+assert.strictEqual(raw.foundry.semanticReplayEqual, true);
+assert.strictEqual(raw.tests.sourceFunctionCount, raw.tests.passedFunctionCount);
+assert(raw.tests.deterministicTestCount >= 14);
+assert.strictEqual(raw.tests.fuzzTestCount, 2);
+assert.strictEqual(raw.tests.fuzzCaseCount, 512);
+assert.strictEqual(raw.tests.totalExecutedCases, raw.tests.deterministicTestCount + 512);
+assert.strictEqual(raw.tests.invariantMatrix.length, 10);
+assert(raw.tests.invariantMatrix.every((x) => x.result === "PASS"));
+const covered = new Set(raw.tests.passRows.map((x) => x.name));
+for (const row of raw.tests.invariantMatrix) for (const test of row.tests) assert(covered.has(test), `${row.id}:${test}`);
+assert.strictEqual(raw.modeledResults.sharedDestinationFeeInvariantViolatedInHypothesisProfile, true);
+assert.strictEqual(raw.modeledResults.zeroAndSubUnitAcceptedInHypothesisProfile, true);
+assert.strictEqual(raw.modeledResults.repeatedUniqueCallsLinearlyDepleteReceiverInHypothesisProfile, true);
+assert.strictEqual(raw.modeledResults.quoteDriftAbsorbedByReceiverInHypothesisProfile, true);
+assert.strictEqual(raw.modeledResults.failedAttemptAtomicAndSuccessfulRetryExactlyOnceInEndpointModel, true);
+assert.strictEqual(raw.modeledResults.refundReturnsToReceiverInModel, true);
+assert.strictEqual(raw.modeledResults.adapterDirectCallbackBlockedByEndpointGuardInModel, true);
+assert.strictEqual(raw.modeledResults.attackerNativePayoutInModel, false);
+assert.strictEqual(raw.modeledResults.attackerExtraRecoverableValueWithoutPriorResidueWei, "0");
+assert.strictEqual(raw.modeledResults.feeDebitWithoutPriorResidueClassification, "grief-or-implicit-subsidy-consumption");
+assert.strictEqual(raw.findings.modelPrimitiveCandidatePendingReviewer, true);
+assert.strictEqual(raw.findings.exactProductionInvariantViolationEstablished, false);
+assert.strictEqual(raw.findings.productionPermissionlessLossEstablished, false);
+assert.strictEqual(raw.findings.productionAttackerProfitEstablished, false);
+assert.strictEqual(raw.findings.routePositive, 0);
+assert(raw.blockers.length >= 5);
+
+assert.strictEqual(manifest.revision, REVISION);
+assert.strictEqual(manifest.runId, raw.runId);
+assert.strictEqual(manifest.classification, raw.classification);
+assert.strictEqual(manifest.pipeline, "0/5");
+assert.strictEqual(manifest.localOnly, true);
+assert.strictEqual(manifest.noRpcInventoryWebForkLive, true);
+assert.strictEqual(manifest.exactStakerReceiverSourceBodiesPresent, false);
+assert.strictEqual(manifest.productionDeploymentEquivalence, false);
+assert.strictEqual(manifest.modelPrimitiveCandidatePendingReviewer, true);
+assert.strictEqual(manifest.exactProductionInvariantViolationEstablished, false);
+assert.strictEqual(manifest.semanticReplayEqual, true);
+assert.strictEqual(manifest.fuzzCaseCount, 512);
+assert.strictEqual(inbox.runId, raw.runId);
+assert.strictEqual(inbox.pipeline, "0/5");
+for (const rec of manifest.records) {
+  const data = fs.readFileSync(abs(rec.path));
+  assert.strictEqual(data.length, rec.bytes, `bytes ${rec.path}`);
+  assert.strictEqual(hash(data), rec.sha256, `hash ${rec.path}`);
+}
+assert.strictEqual(hash(manifest.records.map((x) => `${x.path}\0${x.bytes}\0${x.sha256}`).join("\n")), manifest.aggregateSha256);
+
+assert(sol.includes("FeeAmpReferencePolicy"));
+assert(sol.includes("FeeAmpEndpoint"));
+assert(sol.includes("wholeRoundedBalance"));
+assert(sol.includes("testFuzz_differentialSequenceSharedLossVersusSafeReference"));
+assert(sol.includes("testFuzz_failedDeliveryRetryNeverDuplicates"));
+assert(!/create(?:Select)?Fork|fork-url|rpc_endpoints|graphql_endpoints|eth_call|startBroadcast|https?:\/\//.test(sol));
+const leak = [rawText, manifestText, report, inboxText, handoff].join("\n");
+assert(!/https?:\/\/[a-z0-9]/i.test(leak), "URL leak");
+assert(!/[?&](?:key|token|api_key|apikey)=/i.test(leak), "credential leak");
+assert(!/(authorization|cookie|set-cookie)\s*[:=]/i.test(leak), "header leak");
+assert(report.includes("🟠 WATCH"));
+assert(report.includes("Pipeline:** `0/5`"));
+assert(report.includes("model primitive candidate pending review"));
+assert(report.includes("no attacker native payout"));
+assert(report.includes("nextGate"));
+assert(handoff.includes(raw.runId));
+process.stdout.write(`PASS EtherFi BeHYPE destination-fee Step 1 (${raw.runId}; functions=${raw.tests.passedFunctionCount}; fuzz=${raw.tests.fuzzCaseCount}; records=${manifest.records.length}; ${manifest.aggregateSha256})\n`);

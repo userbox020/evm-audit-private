@@ -1,0 +1,755 @@
+{% extends 'base.html' %}
+{% block title %}Watchboard · Overview{% endblock %}
+{% block content %}
+{% set watch = data.continuous_watch %}
+{% set audit = data.current_audit_state %}
+{% set coverage = data.trigger_coverage %}
+{% set pipeline = data.pipeline %}
+{% set mode = data.mode %}
+{% set wallets = data.wallets %}
+{% set envelopes = data.envelopes %}
+{% set offensive = data.offensive %}
+{% set research_cards = [('R17', data.polymarket_r17), ('R19', data.polymarket_r19), ('R20', data.polymarket_r20)] %}
+
+<section class="hero overview-hero">
+  <div><p class="eyebrow">LOCAL OPERATIONS DESK</p><h1>What needs<br><em>attention now.</em></h1><p class="lede">A loopback-only evidence view. No on-chain signing, broadcast, or transaction controls. Wallet controls below can update the local watchlist and request read-only balance collection.</p></div>
+  <aside class="safety-stamp" aria-label="On-chain safety boundary"><strong>No on-chain actions</strong><span>Execution fail-closed</span><small>Local watchlist edits and balance collection are available below.</small></aside>
+</section>
+<section class="refresh-bar" aria-label="Page refresh status"><span class="refresh-dot" aria-hidden="true"></span><span>Local artifacts are re-read every 60 seconds while this tab is visible. A pending wallet edit or a running collection holds the automatic reload until it is safe.</span><span class="refresh-time" data-refresh-status aria-live="polite">Last UI refresh: this page load</span></section>
+
+<section class="quick-links-bar" aria-label="Monitor and dashboard links">
+  <p class="eyebrow">PAGES &amp; FEEDS</p>
+  <nav class="filters quick-links" aria-label="Monitor and dashboard links">
+    <a href="/monitors/aave-v3-liquidation-trigger-watch">Aave V3 trigger watch</a>
+    <a href="/monitors/aave-v3-hf-watch">Aave V3 HF watch</a>
+    <a href="/monitors/aave-v4-liquidation-watch">Aave V4 watch</a>
+    <a href="/monitors/euler-liquidation-watch">Euler EVK watch</a>
+    <a href="/alarms">Alarms</a>
+    <a href="/canary">Canary</a>
+    <a href="/healthz">Health</a>
+    <a href="/api/v1/snapshot">Snapshot API</a>
+    <a href="/api/v1/ops">Ops API</a>
+    <a href="/api/v1/canary">Canary API</a>
+  </nav>
+  <p class="quiet-copy">All monitor detail pages are also linked by name inside the <em>Legacy monitor inventory</em> block at the bottom of this page.</p>
+</section>
+
+<section class="thesis" aria-labelledby="thesis-title">
+  <div class="thesis-head">
+    <div>
+      <p class="eyebrow">VENTAJA REAL / HUNT THESIS</p>
+      <h2 id="thesis-title">What this workspace actually hunts</h2>
+      <p class="thesis-lede">Permissionless routes we win on insight and access — not on latency. No input manipulation, no victim orderflow, no feed manipulation.</p>
+    </div>
+    {% if coverage.available and coverage.total %}
+    <aside class="thesis-counters" aria-label="Campaign coverage counters">
+      <div class="counter"><b>{{ coverage.counts.COVERED }}</b><span>Covered</span></div>
+      <div class="counter blocked"><b>{{ coverage.counts.BLOCKED }}</b><span>Blocked</span></div>
+      <div class="counter"><b>{{ coverage.total }}</b><span>Rows</span></div>
+    </aside>
+    {% endif %}
+  </div>
+  <div class="thesis-body">
+    <div class="thesis-block">
+      <p class="eyebrow">CLASES QUE CAZAMOS</p>
+      <ul class="thesis-tags">
+        <li>feeds stale / mal configurados (sequencer L2, límites ausentes)</li>
+        <li>inconsistencias cross-feed</li>
+        <li>timing cross-domain</li>
+        <li>accounting inducido (déficit / socialización)</li>
+        <li>estado de cola / epoch</li>
+        <li>precisión / rounding</li>
+        <li>quirks de composición (vault → strategy → adapter)</li>
+        <li>transiciones públicas one-shot</li>
+      </ul>
+    </div>
+    <div class="thesis-block">
+      <p class="eyebrow">VENTAJA DE MÉTODO</p>
+      <ul class="thesis-tags method">
+        <li>decode sin código fuente (probado en XAX / CEDEX / Stochastic)</li>
+        <li>fork proofs locales (localhost-relay, keyless)</li>
+        <li>retention / eligibility specs para ventanas event-driven (Kamino)</li>
+      </ul>
+    </div>
+  </div>
+  <p class="thesis-quote">“Ganamos donde otros no pueden mirar — no donde gana la latencia.”</p>
+</section>
+
+<section class="now-panel" aria-labelledby="now-title">
+  <div class="section-heading"><div><p class="eyebrow">CURRENT OPERATIONS · LEGACY FOUR-PRODUCER SOURCE</p><h2 id="now-title">Continuous Watch</h2></div><p>This scheduler's four checks are separate from the scheduled campaign producer snapshots below. Neither source proves a live process.</p></div>
+  {% if watch.available %}
+  <div class="watch-headline {% if watch.operational %}is-operational{% else %}needs-review{% endif %}">
+    <div><p class="eyebrow">{% if watch.operational %}CURRENT ALIGNED RECORD{% else %}NOT OPERATIONAL{% endif %}</p><h3>{% if watch.operational %}Four-producer cycle aligned{% elif watch.freshness == 'STALE' %}Legacy scheduler record is stale{% else %}Legacy scheduler needs review{% endif %}</h3><p>Cycle {{ watch.cycle|replace('_', ' ')|title }} · {{ watch.freshness|replace('_', ' ')|title }} · generated {{ watch.generated_at }}{% if watch.age is not none %} · {{ watch.age|int }} seconds old{% endif %}.</p></div>
+    <p class="watch-posture">{% if watch.operational %}Four checks are aligned for this recorded cycle; this does not establish daemon liveness. No manual command; triage only on a positive trigger or candidate-change.{% else %}This four-producer scheduler record does not establish a current aligned watch or a live daemon. Persisted PASS or running fields are not proof of current operation; campaign snapshots below cover different checks.{% endif %}</p>
+  </div>
+  <dl class="evidence-grid watch-evidence">
+    {% for producer in watch.producers %}<div class="{% if not producer.aligned %}mismatch{% endif %}"><dt>{{ producer.id|replace('-', ' ')|title }}</dt><dd>{{ producer.status }} · {{ producer.trigger_status }} · {% if producer.aligned %}same-cycle artifact aligned{% else %}artifact mismatch — not merged{% endif %}</dd></div>{% endfor %}
+    <div><dt>Discovery</dt><dd>{{ watch.discovery.status }} · next due {{ watch.discovery.nextDueAt or 'Not reported' }}</dd></div>
+    {% if watch.sentinel.available %}<div><dt>Metadata sentinel</dt><dd>{% if watch.sentinel.status == 'candidate-change' %}Metadata candidate requiring coordinator triage; not deployment, vulnerability, or route proof.{% elif watch.sentinel.status == 'incomplete' %}Incomplete: fail-closed, no baseline, no candidate claim.{% else %}{{ watch.sentinel.status|replace('_', ' ')|title }} · operational health only; no route claim.{% endif %}</dd></div>{% endif %}
+    {% if watch.capability_rotation %}<div><dt>Provider rotation</dt><dd>{{ watch.capability_rotation.status }} · {% if watch.capability_rotation.status == 'READY' %}additional anonymous state-capable family available for future replacement; no route claim.{% elif watch.capability_rotation.status == 'INCOMPLETE' %}no bounded replacement observed; no route claim.{% else %}operational health only; no route claim.{% endif %}</dd></div>{% endif %}
+    <div><dt>Safety</dt><dd>Local-only · sequential/no overlap · zero scheduler retries, signing, and broadcast.</dd></div>
+  </dl>
+   {% else %}<div class="watch-headline needs-review"><div><p class="eyebrow">NO CURRENT READ</p><h3>Legacy continuous watch is unavailable</h3><p>No four-producer scheduler evidence is present. Campaign snapshots below are a separate source; no operational state is inferred.</p></div></div>{% endif %}
+</section>
+
+<section class="action-strip" aria-labelledby="action-title"><div><p class="eyebrow">ACTION READINESS</p><h2 id="action-title">Execution remains disabled</h2></div><p>Positive estimates, watch rows, and scheduler passes are evidence only. No on-chain signing, broadcast, or order execution controls are available here. Wallet controls only update the local watchlist or request read-only balances.</p></section>
+
+<section class="ops-region" aria-labelledby="ops-title">
+  <div class="section-heading"><div><p class="eyebrow">TRIGGER / COVERAGE CAMPAIGN</p><h2 id="ops-title">Operational panels</h2></div><p>Scheduled campaign coverage and producer snapshots are separate from the legacy four-producer watch; they do not establish the same checks or a live daemon. Wallet controls can edit the local watchlist and request read-only balance collection; no on-chain signing or transfer.</p></div>
+
+  <article class="ops-card" aria-labelledby="coverage-title">
+    <header>
+      <div><p class="eyebrow">CAMPAIGN</p><h3 id="coverage-title">Trigger coverage audit</h3></div>
+      <div class="ops-card-head-side">
+        {% if coverage.available %}<span class="pill {{ coverage.freshness|lower }}">{{ coverage.freshness|replace('_', ' ')|title }}</span>{% else %}<span class="pill neutral">UNAVAILABLE</span>{% endif %}
+        {% if coverage.done is not none %}<span class="pill {{ 'clear' if coverage.done else 'unknown' }}">done: {{ coverage.done }}</span>{% endif %}
+      </div>
+    </header>
+    {% if not coverage.available %}
+    <div class="ops-empty"><strong>Coverage audit unavailable.</strong><p>{{ coverage.warnings|join(' ') }}. No coverage status is inferred.</p></div>
+    {% else %}
+    <div class="coverage-stats" aria-label="Coverage counts">
+      <div class="stat covered"><b>{{ coverage.counts.COVERED }}</b><span>Covered</span></div>
+      <div class="stat blocked"><b>{{ coverage.counts.BLOCKED }}</b><span>Blocked</span></div>
+      <div class="stat missing"><b>{{ coverage.counts.MISSING }}</b><span>Missing</span></div>
+      <div class="stat stale"><b>{{ coverage.counts.STALE }}</b><span>Stale</span></div>
+      <div class="stat missing"><b>{{ coverage.total }}</b><span>Rows</span></div>
+    </div>
+    {% if coverage.total %}
+    <div class="progress-block" aria-label="Coverage segments">
+      <div class="progress-row"><span class="progress-label">Covered</span><progress class="progress ok" value="{{ coverage.counts.COVERED }}" max="{{ coverage.total }}"></progress><span class="progress-value">{{ coverage.counts.COVERED }}/{{ coverage.total }}</span></div>
+      <div class="progress-row"><span class="progress-label">Blocked</span><progress class="progress danger" value="{{ coverage.counts.BLOCKED }}" max="{{ coverage.total }}"></progress><span class="progress-value">{{ coverage.counts.BLOCKED }}/{{ coverage.total }}</span></div>
+      <div class="progress-row"><span class="progress-label">Stale / missing</span><progress class="progress warn" value="{{ coverage.counts.STALE + coverage.counts.MISSING }}" max="{{ coverage.total }}"></progress><span class="progress-value">{{ coverage.counts.STALE + coverage.counts.MISSING }}/{{ coverage.total }}</span></div>
+      <p class="progress-caption">Audit {{ 'complete' if coverage.done else 'in progress' }} · {{ coverage.counts.COVERED }} of {{ coverage.total }} campaign rows covered.</p>
+    </div>
+    {% endif %}
+    <p class="coverage-meta"><span>Audited <strong>{{ coverage.audited_at }}</strong></span><span>{{ coverage.freshness|replace('_', ' ')|title }}{% if coverage.age_text %} · {{ coverage.age_text }} old{% endif %}</span><span>{{ coverage.blocked_count }} blocked · {{ coverage.stale_count }} expired</span></p>
+    {% for warning in coverage.warnings %}<p class="ops-note">{{ warning }}.</p>{% endfor %}
+    <nav class="filters" aria-label="Coverage status filters">
+      <a href="/#ops-title" class="{% if not coverage_filter %}active{% endif %}"{% if not coverage_filter %} aria-current="page"{% endif %}>All</a>
+      {% for status in ['COVERED', 'BLOCKED', 'MISSING', 'STALE'] %}<a href="/?coverage={{ status }}#ops-title" class="{% if coverage_filter == status %}active{% endif %}"{% if coverage_filter == status %} aria-current="page"{% endif %}>{{ status|title }}</a>{% endfor %}
+    </nav>
+    <div class="table-wrap" aria-label="Trigger coverage campaign rows" role="region" tabindex="0">
+      <table class="coverage-table">
+        <thead><tr><th scope="col">Campaign row</th><th scope="col">Chain · family</th><th scope="col">Status</th><th scope="col">Age</th><th scope="col">Blockers</th></tr></thead>
+        <tbody>
+        {% for row in coverage.rows if not coverage_filter or row.status == coverage_filter %}
+          <tr class="{% if row.stale %}row-stale{% endif %}">
+            <td>{{ row.id }}<small>{{ row.evidence_count }} evidence item{{ '' if row.evidence_count == 1 else 's' }}</small></td>
+            <td>{{ row.chain }} · {{ row.family }}</td>
+            <td><span class="pill {% if row.status == 'COVERED' %}clear{% elif row.status == 'BLOCKED' %}error{% elif row.status == 'STALE' %}stale{% else %}neutral{% endif %}">{{ row.status }}</span></td>
+            <td>{{ row.age_text or 'Not reported' }}</td>
+            <td>{% if row.blockers %}<details><summary>{{ row.blocker_count }} blocker{{ '' if row.blocker_count == 1 else 's' }}</summary><ul>{% for blocker in row.blockers %}<li>{{ blocker }}</li>{% endfor %}</ul></details>{% else %}<span class="ops-note">None recorded</span>{% endif %}</td>
+          </tr>
+        {% else %}<tr><td colspan="5">No campaign rows match this filter.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </article>
+
+  <article class="ops-card" aria-labelledby="pipeline-title">
+    <header>
+      <div><p class="eyebrow">PIPELINE</p><h3 id="pipeline-title">Producers, autopilot, and dispatch</h3></div>
+      <div class="ops-card-head-side">
+        {% set pw = pipeline.profit_watch %}
+        {% if pw.available %}<span class="pill {{ pw.freshness|lower }}">{{ pw.freshness|replace('_', ' ')|title }}</span><span class="pill {% if pw.attention_count %}error{% else %}neutral{% endif %}">{{ pw.attention_count }} need attention</span>{% else %}<span class="pill neutral">UNAVAILABLE</span>{% endif %}
+      </div>
+    </header>
+    {% if not pipeline.available %}
+    <div class="ops-empty"><strong>Pipeline evidence unavailable.</strong><p>{{ pipeline.warnings|join(' ') }}. No producer, fork, or dispatch state is inferred.</p></div>
+    {% else %}
+    <div class="ops-split">
+      <div class="ops-sub" aria-label="Profit trigger watch">
+        <header><div><p class="eyebrow">SCHEDULED CAMPAIGN · PROFIT TRIGGER WATCH</p><h4>Producer snapshot</h4></div>{% if pw.available %}<span class="pill neutral">{{ 'loop-mode snapshot' if pw.running else 'one-shot snapshot' }}</span>{% endif %}</header>
+        {% if not pw.available %}
+        <p class="ops-lede">{{ pw.warnings|join(' ') }}</p>
+        {% else %}
+        <p class="ops-lede">Generated {{ pw.generated_at }}{% if pw.age_text %} · {{ pw.age_text }} old{% endif %}. Mode is recorded in this artifact; current process liveness is not established. Failed or timed-out producers are highlighted.</p>
+        <div class="table-wrap" aria-label="Producer statuses" role="region" tabindex="0"><table class="producer-list"><thead><tr><th scope="col">Producer</th><th scope="col">Status</th><th scope="col">Reason</th><th scope="col">Age</th></tr></thead><tbody>
+        {% for producer in pw.producers %}<tr class="{% if producer.attention %}attention{% endif %}"><td>{{ producer.id }}</td><td><span class="pill {% if producer.attention %}error{% else %}neutral{% endif %}">{{ producer.status }}</span></td><td>{{ producer.reason }}</td><td>{{ producer.age_text or '—' }}</td></tr>{% endfor %}
+        </tbody></table></div>
+        {% endif %}
+      </div>
+      <div class="ops-sub" aria-label="Fork autopilot">
+        {% set ap = pipeline.autopilot %}
+        <header><div><p class="eyebrow">FORK AUTOPILOT</p><h4>{{ ap.classification or 'Classification unavailable' }}</h4></div>{% if ap.status_available %}<span class="pill {{ ap.freshness|lower }}">{{ ap.freshness|replace('_', ' ')|title }}</span>{% endif %}</header>
+        {% if not ap.status_available %}
+        <p class="ops-lede">{{ ap.warnings|join(' ') }}</p>
+        {% else %}
+        <p class="ops-lede">{% if ap.blocker %}Active blocker: {{ ap.blocker }}.{% else %}No blocking condition reported this pass.{% endif %} A promoted event is a fork candidate only, never a live route.</p>
+        <dl class="batch-facts">
+          <div><dt>Producers</dt><dd>{{ ap.summary.producers }}</dd></div>
+          <div><dt>Fired</dt><dd>{{ ap.summary.fired }}</dd></div>
+          <div><dt>Planned</dt><dd>{{ ap.summary.planned }}</dd></div>
+          <div><dt>Executed</dt><dd>{{ ap.summary.executed }}</dd></div>
+          <div><dt>Promoted</dt><dd>{{ ap.promoted_count }}</dd></div>
+          <div><dt>History</dt><dd>{{ ap.history_count }}</dd></div>
+        </dl>
+        {% if ap.events %}
+        <ul class="event-list" aria-label="Recent autopilot events">
+          {% for event in ap.events %}
+          <li class="event-item {% if event.promoted %}promoted{% endif %}">
+            <header><span class="event-id">{{ event.producer_id }}</span><span class="tag {% if event.promoted %}promoted{% elif event.blocker %}attention{% else %}terminal{% endif %}">{% if event.promoted %}PROMOTED CANDIDATE{% elif event.blocker %}{{ event.blocker }}{% else %}{{ event.result or 'recorded' }}{% endif %}</span></header>
+            <dl><div><dt>Phase</dt><dd>{{ event.phase or 'Not reported' }}</dd></div><div><dt>Terminal</dt><dd>{{ event.terminal }}</dd></div><div><dt>Net</dt><dd>{{ event.net or 'Not reported' }}</dd></div><div><dt>At</dt><dd>{{ event.at or 'Not reported' }}</dd></div></dl>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}<p class="ops-lede">No autopilot events recorded.</p>{% endif %}
+        {% endif %}
+      </div>
+    </div>
+    <div class="audit-strips">
+      {% set disp = pipeline.dispatcher %}
+      <div class="audit-strip {% if disp.attention %}attention{% endif %}">
+        <header><div><p class="eyebrow">ALERT DISPATCHER</p><h4>{{ disp.last_run_result or 'No delivery run' }}</h4></div>{% if disp.available %}<span class="pill {{ disp.freshness|lower }}">{{ disp.freshness|replace('_', ' ')|title }}</span>{% else %}<span class="pill neutral">UNAVAILABLE</span>{% endif %}</header>
+        {% if disp.available %}
+        <dl>
+          <div><dt>Observations</dt><dd>{{ disp.summary.observations }}</dd></div>
+          <div><dt>Would alert</dt><dd>{{ disp.summary.would_alert }}</dd></div>
+          <div><dt>Dispatched</dt><dd>{{ disp.summary.dispatched }}</dd></div>
+          <div><dt>Delivered</dt><dd>{{ disp.summary.delivered }}</dd></div>
+          <div><dt>Delivery unavailable</dt><dd>{{ disp.summary.delivery_unavailable }}</dd></div>
+          <div><dt>Pending / queue</dt><dd>{{ disp.summary.pending }} / {{ disp.summary.queue_size }}</dd></div>
+          <div><dt>Dropped</dt><dd>{{ disp.summary.dropped }}</dd></div>
+          <div><dt>Mode</dt><dd>{{ disp.mode }}{% if disp.baseline_established %} · baseline set{% endif %}</dd></div>
+        </dl>
+        {% else %}<p class="ops-lede">{{ disp.warnings|join(' ') }}</p>{% endif %}
+      </div>
+      {% set wd = pipeline.watchdog %}
+      <div class="audit-strip {% if wd.attention %}attention{% endif %}">
+        <header><div><p class="eyebrow">SET WATCHDOG</p><h4>{{ wd.inspection or 'No inspection' }}</h4></div>{% if wd.available %}<span class="pill {{ wd.freshness|lower }}">{{ wd.freshness|replace('_', ' ')|title }}</span>{% else %}<span class="pill neutral">UNAVAILABLE</span>{% endif %}</header>
+        {% if wd.available %}
+        <dl>
+          <div><dt>Services</dt><dd>{{ wd.summary.total }}</dd></div>
+          <div><dt>Running</dt><dd>{{ wd.summary.running }}</dd></div>
+          <div><dt>Failed</dt><dd>{{ wd.summary.failed }}</dd></div>
+          <div><dt>Missing</dt><dd>{{ wd.summary.missing }}</dd></div>
+          <div><dt>Relaunched</dt><dd>{{ wd.summary.relaunched }}</dd></div>
+          <div><dt>Cooldown / would relaunch</dt><dd>{{ wd.summary.cooldown }} / {{ wd.summary.would_relaunch }}</dd></div>
+          <div><dt>Wall clock capped</dt><dd>{{ wd.wall_clock_capped }}</dd></div>
+          <div><dt>Generated</dt><dd>{{ wd.generated_at }}</dd></div>
+        </dl>
+        {% else %}<p class="ops-lede">{{ wd.warnings|join(' ') }}</p>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </article>
+
+  <article class="ops-card" aria-labelledby="mode-title">
+    <header>
+      <div><p class="eyebrow">MODE</p><h3 id="mode-title">Read-only mode · fail-closed readiness</h3></div>
+      <div class="ops-card-head-side"><span class="pill neutral">{{ mode.current|default('READ_ONLY') }}</span><span class="pill neutral">{{ mode.pass_count }}/{{ mode.gate_count }} gates</span></div>
+    </header>
+    <div class="mode-banner {% if mode.current == 'LIVE' %}is-live{% endif %}">
+      <div><p class="eyebrow">CURRENT MODE</p><h3>{{ mode.current|default('READ_ONLY') }}</h3><p>{% if mode.current == 'LIVE' %}A valid, unexpired approved batch is present. This panel still cannot execute it.{% else %}Read-only runtime. The dashboard never executes. A valid approved batch, if present, records verified authorization only — no controller, route, or executor is connected, so execution remains disabled here regardless of batch approval.{% endif %}</p>
+      <p>Runtime readiness <strong>{{ mode.readiness|default('NOT_READY') }}</strong> · Scope <strong>{{ mode.scope|default('NOT_VERIFIED') }}</strong> · {{ mode.readiness_reason|default('Runtime and route readiness are not established; fail closed until reported.') }}</p></div>
+      <div class="mode-score"><b>{{ mode.pass_count }}/{{ mode.gate_count }}</b><span>Gates satisfied</span></div>
+    </div>
+    <div class="progress-block" aria-label="Live-readiness progress">
+      <div class="progress-row"><span class="progress-label">Gates</span><progress class="progress {% if mode.go_live_ready %}ok{% elif mode.pass_count %}warn{% endif %}" value="{{ mode.pass_count }}" max="{{ mode.gate_count }}"></progress><span class="progress-value">{{ mode.pass_count }}/{{ mode.gate_count }}</span></div>
+      <p class="progress-caption">{% if mode.go_live_ready %}All readiness gates satisfied.{% else %}Fail-closed: {{ mode.pass_count }} of {{ mode.gate_count }} readiness gates satisfied.{% endif %}</p>
+    </div>
+    <ul class="gate-list" aria-label="Go-live gate checklist">
+      {% for gate in mode.gates %}
+      <li class="gate {% if gate.state == 'PASS' %}pass{% elif gate.state == 'FAIL' %}fail{% else %}unknown{% endif %}">
+        <span class="gate-index">{{ loop.index }}</span>
+        <div><h4>{{ gate.label }}</h4><p>{{ gate.reason }}</p><span class="gate-source">{{ gate.source }}</span></div>
+        <span class="pill {% if gate.state == 'PASS' %}clear{% elif gate.state == 'FAIL' %}error{% else %}neutral{% endif %}">{{ gate.state }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% for warning in mode.warnings %}<p class="ops-note">{{ warning }}.</p>{% endfor %}
+    <div class="ops-split">
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">BATCH</p><h4>Approved batch (authorization only)</h4></div><span class="pill {% if mode.batch.state == 'VALID' %}clear{% elif mode.batch.state in ['INVALID', 'EXPIRED'] %}error{% else %}neutral{% endif %}">{{ mode.batch.state }}</span></header>
+        <p class="ops-lede">{{ mode.batch.detail }}.</p>
+        <p class="ops-note">Batch VALID is verifier-checked authorization only. It does not mean a run is ready: the runtime is read-only and route readiness stays separate above.</p>
+        <dl class="batch-facts">
+          <div><dt>Status</dt><dd>{{ mode.batch.status or 'Not reported' }}</dd></div>
+          <div><dt>Expires</dt><dd>{{ mode.batch.expires_at or 'Not reported' }}</dd></div>
+          <div><dt>Actions</dt><dd>{{ mode.batch.action_count if mode.batch.action_count is not none else 'Not reported' }}</dd></div>
+          <div><dt>Approver evidence</dt><dd>{{ mode.batch.approver_evidence if mode.batch.approver_evidence is not none else 'Not reported' }}</dd></div>
+        </dl>
+      </div>
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">APPROVERS</p><h4>Approver registry</h4></div><span class="pill {% if mode.approvers.count %}clear{% else %}neutral{% endif %}">{{ mode.approvers.count }}</span></header>
+        {% if mode.approvers.available %}<p class="ops-lede">Algorithms: {{ mode.approvers.algorithms|join(', ') if mode.approvers.algorithms else 'Not reported' }}. Public keys are not displayed.</p>{% else %}<p class="ops-lede">Registry unavailable or invalid; provisioned state is unknown.</p>{% endif %}
+      </div>
+    </div>
+    <p class="ops-note">Approved-batch workflow (text only): <code>{{ mode.workflow.command }}</code>. {{ mode.workflow.note }}</p>
+  </article>
+
+  <article class="ops-card" aria-labelledby="offensive-title">
+    <header>
+      <div><p class="eyebrow">OFFENSIVE PROGRAM</p><h3 id="offensive-title">Live-execution envelopes &amp; watch lane</h3></div>
+      <div class="ops-card-head-side">
+        {% if envelopes %}<span class="pill neutral">{{ envelopes.approved_count }}/{{ envelopes.count }} verified valid</span>{% else %}<span class="pill neutral">UNAVAILABLE</span>{% endif %}
+        {% if offensive and offensive.available %}<span class="pill neutral">lane evidence present</span>{% else %}<span class="pill neutral">lane evidence absent</span>{% endif %}
+      </div>
+    </header>
+    <p class="ops-note"><strong>Read-only.</strong> The root batch uses signed verification. Other envelopes show unverified metadata, budgets, and watch decisions. Nothing here signs, broadcasts, or authorizes execution. Metadata countdowns use reported expiry.</p>
+    {% if envelopes and envelopes.available %}
+    <div class="table-wrap" aria-label="Live-execution envelopes" role="region" tabindex="0">
+      <table class="coverage-table">
+        <thead><tr><th scope="col">Envelope</th><th scope="col">State</th><th scope="col">Expires</th><th scope="col">Fire sleeve</th></tr></thead>
+        <tbody>
+        {% for row in envelopes.rows %}
+          <tr>
+            <td>{{ row.label }}<small>{{ row.batch_id or 'batch id not reported' }}{% if row.chain %} &middot; {{ row.chain }}{% endif %}</small></td>
+            <td>
+               <span class="pill {% if row.status == 'VALID' and row.verification == 'VERIFIED' %}clear{% elif row.status in ['EXPIRED', 'INVALID', 'UNREADABLE'] %}error{% else %}neutral{% endif %}">{{ row.status }}</span>
+              <span class="pill {{ (row.freshness or 'UNKNOWN')|lower }}">{{ (row.freshness or 'UNKNOWN')|replace('_', ' ')|title }}{% if row.age_text %} &middot; {{ row.age_text }}{% endif %}</span>
+              {% if row.signed_executions.consumed is none and row.signed_executions.total is not none %}<span class="pill neutral">consumed not reported</span>{% endif %}
+            </td>
+            <td>{% if row.expires_in %}<strong>{{ row.expires_in }}</strong><small>{{ row.expires_at }}</small>{% else %}<span class="ops-note">expiry not reported</span>{% endif %}</td>
+            <td>
+              {% if row.signed_executions.total is not none %}<span>signed {{ row.signed_executions.consumed if row.signed_executions.consumed is not none else '&mdash;' }}/{{ row.signed_executions.total }}{% if row.signed_executions.remaining is not none %} &middot; {{ row.signed_executions.remaining }} left{% endif %}</span>{% else %}<span class="ops-note">budget not reported</span>{% endif %}
+              {% if row.caps.max_native_wei %}<small>&le; {{ row.caps.max_native_wei }} wei/tx{% if row.caps.max_gas %} &middot; {{ row.caps.max_gas }} gas{% endif %}</small>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="ops-empty"><strong>No live-execution envelope is readable.</strong><p>Approved-batch evidence is absent or invalid. No approval, expiry, or budget state is inferred.</p></div>
+    {% endif %}
+
+    {% set whales = offensive.top_whales|default({}) %}
+    {% set whale_deploy = whales.deploy|default({}) %}
+    {% set v3_live_watch = whales.v3_live_watch|default({}) %}
+    <div class="ops-split">
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">TOP WHALE TRIGGERS</p><h4>Whale trigger watch</h4><p class="ops-note"><a href="/targets">Open full Targets view ↗</a></p></div><span class="pill {{ (whales.freshness or 'UNKNOWN')|lower }}">{{ (whales.freshness or 'UNKNOWN')|title }}{% if whales.age_text %} &middot; {{ whales.age_text }}{% endif %}</span></header>
+        {% if whales.available %}
+        <p class="ops-lede"><span class="pill {% if whales.any_fired %}warn{% else %}neutral{% endif %}">{{ 'Trigger reported' if whales.any_fired else 'No trigger reported' }}</span> in the recorded snapshot.</p>
+        <dl class="batch-facts">
+          <div><dt>Generated</dt><dd>{{ whales.generated_at or 'Not reported' }}</dd></div>
+          <div><dt>Snapshot block</dt><dd>{{ whales.pin_block if whales.pin_block is not none else 'Not reported' }}</dd></div>
+          <div><dt>Block time</dt><dd>{{ whales.pin_utc or 'Not reported' }}</dd></div>
+          <div><dt>Morpho flash liquidity</dt><dd>{% if whales.morpho_flash.usdc is not none %}{{ '{:,.2f}'.format(whales.morpho_flash.usdc) }} USDC{% else %}USDC not reported{% endif %}<br>{% if whales.morpho_flash.weth is not none %}{{ '{:,.2f}'.format(whales.morpho_flash.weth) }} WETH{% else %}WETH not reported{% endif %}</dd></div>
+        </dl>
+        <p class="ops-note">Conditions and liquidity are reported at the snapshot block, not confirmed live. A trigger does not confirm execution.</p>
+        {% else %}<p class="ops-note">Whale trigger snapshot unavailable or invalid. No trigger state or liquidity is inferred.</p>{% endif %}
+      </div>
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">WHALE EXECUTOR</p><h4>Aave V4 / V3 deployment</h4></div><span class="pill neutral">{{ 'Receipt available' if whale_deploy.available else 'UNAVAILABLE' }}</span></header>
+        {% if whale_deploy.available %}
+        <dl class="batch-facts">
+          <div><dt>Contract</dt><dd>{{ whale_deploy.short_address or 'Not reported' }}</dd></div>
+          <div><dt>Transaction</dt><dd>{{ whale_deploy.short_tx or 'Not reported' }}</dd></div>
+          <div><dt>Deploy block</dt><dd>{{ whale_deploy.block_number if whale_deploy.block_number is not none else 'Not reported' }}</dd></div>
+          <div><dt>Deployed</dt><dd>{{ whale_deploy.deployed_at or 'Not reported' }}</dd></div>
+          <div><dt>Gas used</dt><dd>{{ whale_deploy.gas_used or 'Not reported' }}</dd></div>
+          <div><dt>Actual fee</dt><dd>{% if whale_deploy.actual_fee_eth is not none %}{{ '{:.6f}'.format(whale_deploy.actual_fee_eth) }} ETH{% else %}Not reported{% endif %}</dd></div>
+          <div><dt>Code size</dt><dd>{% if whale_deploy.code_bytes is not none %}{{ whale_deploy.code_bytes }} bytes{% else %}Not reported{% endif %}</dd></div>
+          <div><dt>Owner</dt><dd>{{ whale_deploy.owner or 'Not reported' }}</dd></div>
+        </dl>
+        <p class="ops-note">Deployment evidence only; execution readiness and authorization remain separate.</p>
+        {% else %}<p class="ops-note">Executor deployment receipt unavailable or invalid.</p>{% endif %}
+        <p class="ops-note"><strong>Unified executor · last runner report</strong></p>
+        {% if v3_live_watch.available %}
+        <p class="ops-lede"><span class="pill {{ (v3_live_watch.freshness or 'UNKNOWN')|lower }}">{{ (v3_live_watch.freshness or 'UNKNOWN')|title }}{% if v3_live_watch.age_text %} &middot; {{ v3_live_watch.age_text }}{% endif %}</span> Unified runner snapshot</p>
+        <dl class="batch-facts">
+          <div><dt>Reported mode</dt><dd>{{ v3_live_watch.mode or 'Not reported' }}</dd></div>
+          <div><dt>Partition</dt><dd>{{ v3_live_watch.partition or 'Not reported' }}</dd></div>
+          <div><dt>Latest checked block</dt><dd>{{ v3_live_watch.block_number if v3_live_watch.block_number is not none else 'Not reported' }}</dd></div>
+          <div><dt>Latest checked timestamp</dt><dd>{{ v3_live_watch.checked_at or 'Not reported' }}</dd></div>
+          <div><dt>Eligible candidates</dt><dd>{{ v3_live_watch.candidate_count if v3_live_watch.candidate_count is not none else 'Not reported' }}</dd></div>
+        </dl>
+        <p class="ops-note">A stored runner report does not establish current process liveness, execution authority, broadcast, or realized profit.</p>
+        {% else %}
+        <p class="ops-note"><span class="pill neutral">UNAVAILABLE</span> Unified executor watch snapshot unavailable or invalid.</p>
+        {% endif %}
+        {% if whales.base_executor and whales.base_executor.available %}
+        {% set base_executor = whales.base_executor %}
+        <p class="ops-note"><strong>Base Morpho Executor ({{ base_executor.short_address or 'Address not reported' }} &middot; Chain 8453)</strong></p>
+        <dl class="batch-facts ops-kv">
+          <div><dt>Contract</dt><dd class="ops-note mono">{{ base_executor.contract_address or 'Not reported' }}</dd></div>
+          <div><dt>Base deploy block</dt><dd>{{ base_executor.block_number if base_executor.block_number is not none else 'Not reported' }}</dd></div>
+          <div><dt>Gas used</dt><dd>{{ base_executor.gas_used if base_executor.gas_used is not none else 'Not reported' }}</dd></div>
+          <div><dt>Actual fee</dt><dd>{% if base_executor.actual_fee_eth is not none %}{{ base_executor.actual_fee_eth }} ETH{% else %}Not reported{% endif %}</dd></div>
+          <div><dt>Code size</dt><dd>{% if base_executor.code_bytes is not none %}{{ base_executor.code_bytes }} bytes{% else %}Not reported{% endif %}</dd></div>
+          <div><dt>Owner</dt><dd class="ops-note mono">{{ base_executor.owner or 'Not reported' }}</dd></div>
+          <div><dt>Remaining Base ETH (at deployment)</dt><dd>{% if base_executor.owner_eth_after is not none %}{{ base_executor.owner_eth_after }} ETH{% else %}Not reported{% endif %}</dd></div>
+        </dl>
+        <p class="ops-note">Deployment evidence only. Owner balance is recorded after deployment, not a live balance. Execution readiness and authorization remain separate.</p>
+        {% endif %}
+        {% if whales.base_live_watch and whales.base_live_watch.available %}
+        {% set base_live_watch = whales.base_live_watch %}
+        <p class="ops-note"><strong>Base Morpho Live Watch</strong></p>
+        <p class="ops-lede"><span class="pill {{ (base_live_watch.freshness or 'UNKNOWN')|lower }}">{{ (base_live_watch.freshness or 'UNKNOWN')|title }}{% if base_live_watch.age_text %} &middot; {{ base_live_watch.age_text }}{% endif %}</span> Base runner snapshot</p>
+        <dl class="batch-facts ops-kv">
+          <div><dt>Reported mode</dt><dd>{{ base_live_watch.mode or 'Not reported' }}</dd></div>
+          <div><dt>Latest checked Base block</dt><dd>{{ base_live_watch.block_number if base_live_watch.block_number is not none else 'Not reported' }}</dd></div>
+          <div><dt>Latest checked timestamp</dt><dd>{{ base_live_watch.checked_at or 'Not reported' }}</dd></div>
+          <div><dt>Fired count</dt><dd>{{ base_live_watch.fired_count if base_live_watch.fired_count is not none else 'Not reported' }}</dd></div>
+        </dl>
+        <p class="ops-note">Configured Base implementation: <span class="mono">0x88bf…4f32</span>. Mode and fired count are last-reported telemetry, not proof of a running executor, authorization, broadcast, or realized profit.</p>
+        {% endif %}
+      </div>
+    </div>
+    {% set v4_executor = whales.v4_executor|default({}) %}
+    {% set v4_live_watch = whales.v4_live_watch|default({}) %}
+    {% set v4_rehearsal = whales.v4_rehearsal|default({}) %}
+    {% set base_rehearsal = whales.base_rehearsal|default({}) %}
+    <div class="ops-split">
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">DEDICATED EXECUTOR</p><h4>Aave V4 Dedicated Executor</h4><p class="ops-note"><code>FlashLiquidateAaveV4</code></p></div><span class="pill neutral">{{ 'Receipt available' if v4_executor.available else 'UNAVAILABLE' }}</span></header>
+        {% if v4_executor.available %}
+        <dl class="batch-facts">
+          <div><dt>Contract</dt><dd>{{ v4_executor.short_address or 'Not reported' }}</dd></div>
+          <div><dt>Transaction</dt><dd>{{ v4_executor.short_tx or 'Not reported' }}</dd></div>
+          <div><dt>Deploy block</dt><dd>{{ v4_executor.block_number if v4_executor.block_number is not none else 'Not reported' }}</dd></div>
+          <div><dt>Deployed</dt><dd>{{ v4_executor.deployed_at or 'Not reported' }}</dd></div>
+          <div><dt>Gas / Fee</dt><dd>{% if v4_executor.gas_used %}{{ v4_executor.gas_used }} gas{% else %}Gas not reported{% endif %} &middot; {% if v4_executor.actual_fee_eth %}{{ v4_executor.actual_fee_eth }} ETH{% else %}ETH fee not reported{% endif %} / {% if v4_executor.actual_fee_usd %}${{ v4_executor.actual_fee_usd }}{% else %}USD fee not reported{% endif %}</dd></div>
+          <div><dt>Code size</dt><dd>{% if v4_executor.code_bytes is not none %}{{ v4_executor.code_bytes }} bytes{% else %}Not reported{% endif %}</dd></div>
+          <div><dt>Owner</dt><dd>{{ v4_executor.owner or 'Not reported' }} &middot; {% if v4_executor.owner_eth_after %}{{ v4_executor.owner_eth_after }} ETH{% else %}Balance not reported{% endif %}</dd></div>
+        </dl>
+        <p class="ops-note"><span class="pill {% if v4_executor.two_provider_verified %}clear{% else %}neutral{% endif %}">{{ 'Two-provider verified' if v4_executor.two_provider_verified else 'Two-provider verification not confirmed' }}</span></p>
+        <p class="ops-note">Deployment evidence only. Owner balance is recorded after deployment, not a live balance. Execution readiness and authorization remain separate.</p>
+        {% else %}<p class="ops-note">Dedicated Aave V4 executor deployment receipt unavailable or invalid.</p>{% endif %}
+      </div>
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">WATCH &amp; FORK EVIDENCE</p><h4>Aave V4 Live Sentinel &amp; Multi-Spoke Fork Rehearsal</h4></div></header>
+        {% if v4_live_watch.available %}
+        <p class="ops-lede"><span class="pill {{ (v4_live_watch.freshness or 'UNKNOWN')|lower }}">{{ (v4_live_watch.freshness or 'UNKNOWN')|title }}{% if v4_live_watch.age_text %} &middot; {{ v4_live_watch.age_text }}{% endif %}</span> Live watch snapshot</p>
+        <dl class="batch-facts">
+          <div><dt>Mode</dt><dd>{{ v4_live_watch.mode or 'Not reported' }}</dd></div>
+          <div><dt>Latest checked block</dt><dd>{{ v4_live_watch.block_number if v4_live_watch.block_number is not none else 'Not reported' }}</dd></div>
+          <div><dt>Latest checked timestamp</dt><dd>{{ v4_live_watch.checked_at or 'Not reported' }}</dd></div>
+          <div><dt>Fired count</dt><dd>{{ v4_live_watch.fired_count if v4_live_watch.fired_count is not none else 'Not reported' }}</dd></div>
+        </dl>
+        <p class="ops-note">Mode and fired count are reported by the sentinel. A fired count does not confirm a successful on-chain execution; the dashboard remains read-only.</p>
+        {% else %}<p class="ops-note"><span class="pill neutral">UNAVAILABLE</span> Live sentinel snapshot unavailable or invalid. No mode or fired count is inferred.</p>{% endif %}
+        <p class="ops-note"><strong>Multi-Spoke Fork Rehearsal</strong></p>
+        {% if v4_rehearsal.available %}
+        {% set spoke_a_gain = v4_rehearsal.spoke_a_gain_usdc|float(none) %}
+        {% set spoke_a_gas = v4_rehearsal.spoke_a_gas|int(none) %}
+        {% set spoke_c_gain = v4_rehearsal.spoke_c_gain_weth|float(none) %}
+        {% set spoke_c_usd = v4_rehearsal.spoke_c_gain_usd|float(none) %}
+        {% set spoke_c_gas = v4_rehearsal.spoke_c_gas|int(none) %}
+        <p class="ops-note">Fork proof block {{ v4_rehearsal.pin_block if v4_rehearsal.pin_block is not none else 'not reported' }}.</p>
+        <dl class="batch-facts">
+          <div><dt>Spoke A USDe/USDC</dt><dd>{% if spoke_a_gain is not none %}{{ '{:+,.2f}'.format(spoke_a_gain) }} USDC owner gain (pre-gas){% else %}Gain not reported{% endif %} &middot; {% if spoke_a_gas is not none %}{{ '{:,}'.format(spoke_a_gas) }} gas{% else %}Gas not reported{% endif %}</dd></div>
+          <div><dt>Spoke C weETH/WETH</dt><dd>{% if spoke_c_gain is not none %}{{ '{:+.6f}'.format(spoke_c_gain) }} WETH{% else %}Gain not reported{% endif %}{% if spoke_c_usd is not none %} / ~${{ '{:,.2f}'.format(spoke_c_usd) }}{% endif %} &middot; {% if spoke_c_gas is not none %}{{ '{:,}'.format(spoke_c_gas) }} gas{% else %}Gas not reported{% endif %}</dd></div>
+        </dl>
+        <p class="ops-note">Conditional, fork-only owner-token gains before network gas; gas is shown separately. These results do not establish live eligibility, executable net profit, or realized mainnet profit.</p>
+        {% else %}<p class="ops-note">Multi-spoke fork rehearsal unavailable or invalid. No gain or gas result is inferred.</p>{% endif %}
+        <p class="ops-note"><strong>Base Morpho local-fork rehearsals</strong></p>
+        {% if base_rehearsal.available %}
+        {% set b0_gain = base_rehearsal.b0_gain_usdc|float(none) %}
+        {% set b0_gas = base_rehearsal.b0_gas|int(none) %}
+        {% set b1_gain = base_rehearsal.b1_gain_usdc|float(none) %}
+        {% set b1_gas = base_rehearsal.b1_gas|int(none) %}
+        {% set b2_gain = base_rehearsal.b2_gain_usdc|float(none) %}
+        {% set b2_gas = base_rehearsal.b2_gas|int(none) %}
+        <p class="ops-note">USDe/USDC fork proof block {{ base_rehearsal.pin_block if base_rehearsal.pin_block is not none else 'not reported' }} &middot; 680k USDe partial liquidation &middot; Base Mainnet Executor <span class="mono">0x88bf…4f32</span> (deployed at block 52,837,009){% if base_rehearsal.deploy_gas %} &middot; {{ base_rehearsal.deploy_gas }} deploy gas{% endif %}.</p>
+        <dl class="batch-facts">
+          {% if b0_gain is not none or b0_gas is not none %}<div><dt>#B0 USDe/USDC (0x6075…2b72 · historical rehearsal)</dt><dd>{% if b0_gain is not none %}{{ '{:+,.2f}'.format(b0_gain) }} USDC owner gain (pre-gas){% else %}Gain not reported{% endif %} &middot; {% if b0_gas is not none %}{{ '{:,}'.format(b0_gas) }} gas{% else %}Gas not reported{% endif %}</dd></div>{% endif %}
+          <div><dt>#B1 USDe/USDC (0xb4fb…59c1)</dt><dd>{% if b1_gain is not none %}{{ '{:+,.2f}'.format(b1_gain) }} USDC owner gain (pre-gas){% else %}Gain not reported{% endif %} &middot; {% if b1_gas is not none %}{{ '{:,}'.format(b1_gas) }} gas{% else %}Gas not reported{% endif %}</dd></div>
+          <div><dt>#B2 USDe/USDC (0x7bee…0fab)</dt><dd>{% if b2_gain is not none %}{{ '{:+,.2f}'.format(b2_gain) }} USDC owner gain (pre-gas){% else %}Gain not reported{% endif %} &middot; {% if b2_gas is not none %}{{ '{:,}'.format(b2_gas) }} gas{% else %}Gas not reported{% endif %}</dd></div>
+          {% if base_rehearsal.b7_gain_usdc is defined and base_rehearsal.b7_gain_usdc is not none %}
+          {% set b7_gain = base_rehearsal.b7_gain_usdc|float(none) %}
+          {% set b7_gas = base_rehearsal.b7_gas|default(none)|int(none) %}
+          <div><dt>#B7 yoUSD / USDC · yoUSD.redeem</dt><dd class="mono">Base fork block {{ base_rehearsal.b7_pin_block if base_rehearsal.b7_pin_block is defined and base_rehearsal.b7_pin_block is not none else 'not reported' }} &middot; executor 0x88bf…4f32<br>{% if b7_gain is not none %}{{ '{:+,.2f}'.format(b7_gain) }} USDC owner gain (pre-gas){% else %}Gain not reported{% endif %} &middot; {% if b7_gas is not none %}{{ '{:,}'.format(b7_gas) }} gas{% else %}Gas not reported{% endif %}<br>Rehearsal snapshot: 0.41 bps &middot; 5.5h passive crossing estimate.</dd></div>
+          {% endif %}
+        </dl>
+        <p class="ops-note">Historical Base setup and fork gains are conditional and pre-gas, not realized mainnet profit or evidence of a currently running executor.</p>
+        {% else %}
+        <p class="ops-note">Base Morpho fork rehearsals unavailable or invalid.</p>
+        {% endif %}
+        {% if whales.morpho_rehearsal and whales.morpho_rehearsal.available %}
+        <p class="ops-note"><strong>Morpho local-fork rehearsals</strong></p>
+        <dl class="batch-facts ops-kv">
+          <div><dt>#M1 USDe / DAI (0xaf5b…07ba)</dt><dd class="mono">Fork block {{ whales.morpho_rehearsal.m1_pin_block if whales.morpho_rehearsal.m1_pin_block is not none else 'not reported' }}<br>{% if whales.morpho_rehearsal.m1_gain_dai is not none %}+{{ whales.morpho_rehearsal.m1_gain_dai }} DAI owner gain (pre-gas){% else %}Gain not reported{% endif %} &middot; {% if whales.morpho_rehearsal.m1_gas is not none %}{{ whales.morpho_rehearsal.m1_gas }} gas{% else %}Gas not reported{% endif %}</dd></div>
+          <div><dt>#M2 reUSD / USDC · MorphoLiquidateUnwindRoundTrip deployment reference</dt><dd class="mono">Executor 0x2d5bca1b846e89965544c7f03d09a25126803627 &middot; mainnet deployment block 26231360<br>Fork block {{ whales.morpho_rehearsal.m2_pin_block if whales.morpho_rehearsal.m2_pin_block is not none else 'not reported' }} &middot; {% if whales.morpho_rehearsal.m2_deploy_gas is not none %}deploy {{ whales.morpho_rehearsal.m2_deploy_gas }} gas{% else %}Deploy gas not reported{% endif %}<br>{% if whales.morpho_rehearsal.m2_gain_usdc is not none %}+${{ whales.morpho_rehearsal.m2_gain_usdc }} USDC owner gain (pre-gas){% else %}Gain not reported{% endif %} &middot; {% if whales.morpho_rehearsal.m2_gas is not none %}{{ whales.morpho_rehearsal.m2_gas }} gas{% else %}Gas not reported{% endif %}</dd></div>
+          {% if whales.morpho_rehearsal.m7_gain_mseth is defined and whales.morpho_rehearsal.m7_gain_mseth is not none %}
+          {% set m7_deployment = whales.morpho_fork_rehearsals|selectattr('rank', 'equalto', '#M7')|first %}
+          <div><dt>#M7 ynETHx / msETH · MorphoVaultRedeemUnwindRoundTrip deployment reference</dt><dd class="mono">Executor {{ m7_deployment.executor }} &middot; mainnet deployment block {{ m7_deployment.deployed_block }}<br>Fork block {{ whales.morpho_rehearsal.m7_pin_block if whales.morpho_rehearsal.m7_pin_block is not none else 'not reported' }}{% if whales.morpho_rehearsal.m7_deploy_gas %} &middot; deploy {{ whales.morpho_rehearsal.m7_deploy_gas }} gas{% endif %}<br>+{{ whales.morpho_rehearsal.m7_gain_mseth }} msETH owner gain (pre-gas) &middot; {{ whales.morpho_rehearsal.m7_gas or 'not reported' }} gas{% for note in m7_deployment.notes %}<br>{{ note }}{% endfor %}</dd></div>
+          {% endif %}
+          {% if whales.morpho_rehearsal.m8_gain_dai is defined and whales.morpho_rehearsal.m8_gain_dai is not none %}
+          {% set m8_gain = whales.morpho_rehearsal.m8_gain_dai|float(none) %}
+          {% set m8_gas = whales.morpho_rehearsal.m8_gas|default(none)|int(none) %}
+          {% set m9_gain = whales.morpho_rehearsal.m9_gain_dai|default(none)|float(none) %}
+          {% set m9_gas = whales.morpho_rehearsal.m9_gas|default(none)|int(none) %}
+          <div><dt>#M8 / #M9 PT-USDe-31JUL2025 / DAI · staged Pendle redemption</dt><dd class="mono">Ethereum fork block {{ whales.morpho_rehearsal.m8_pin_block if whales.morpho_rehearsal.m8_pin_block is defined and whales.morpho_rehearsal.m8_pin_block is not none else 'not reported' }}{% if whales.morpho_rehearsal.m8_deploy_gas %} &middot; staged deploy {{ whales.morpho_rehearsal.m8_deploy_gas }} gas{% endif %}<br>PT-USDe → SY → USDe → DAI<br><span class="ops-note">MorphoPendlePtRedeemUnwindRoundTrip</span><br>#M8: {% if m8_gain is not none %}{{ '{:+,.2f}'.format(m8_gain) }} DAI owner gain (pre-gas){% else %}Gain not reported{% endif %} &middot; {% if m8_gas is not none %}{{ '{:,}'.format(m8_gas) }} gas{% else %}Gas not reported{% endif %}<br>#M9: {% if m9_gain is not none %}{{ '{:+,.2f}'.format(m9_gain) }} DAI owner gain (pre-gas){% else %}Gain not reported{% endif %} &middot; {% if m9_gas is not none %}{{ '{:,}'.format(m9_gas) }} gas{% else %}Gas not reported{% endif %}<br>Rehearsal distances: #M8 38.67 bps &middot; #M9 41.0 bps.</dd></div>
+          {% endif %}
+        </dl>
+        <p class="ops-note">Deployment and local-fork references are separate from runner liveness. Conditional local-fork owner gains before network gas are not realized mainnet profit. These results do not establish current eligibility or executable net profit.</p>
+        {% endif %}
+      </div>
+    </div>
+    {% if whales.available %}
+    <div class="ops-sub">
+      <header><div><p class="eyebrow">WATCH TARGETS</p><h4 id="whale-targets-title">Top whale conditions</h4></div><span class="pill neutral">{{ whales.targets|length }} targets</span></header>
+      {% if whales.targets %}
+      <div class="table-wrap" aria-labelledby="whale-targets-title" role="region" tabindex="0">
+        <table class="coverage-table">
+          <thead><tr><th scope="col">Target</th><th scope="col">Condition</th><th scope="col">Timing / position</th><th scope="col">Reported amounts</th><th scope="col">Quote / stored estimate</th><th scope="col">Configured implementation</th></tr></thead>
+          <tbody>
+          {% for row in whales.targets %}
+            {% set is_base_morpho = row.protocol == 'Morpho Blue (Base)' %}
+            {% set is_paxg = row.protocol == 'Morpho Blue' and row.pair == 'PAXG / USDC' %}
+            {% set observation_only = row.observation_only|default(is_base_morpho or is_paxg) %}
+            <tr>
+              <td><strong>{{ row.rank }} {{ row.label }}</strong><small>{{ row.protocol }} &middot; {{ row.pair }}</small><small>Account {{ row.user_short or 'not reported' }}</small><small>Venue {{ row.venue_short or 'not reported' }}</small></td>
+              <td>
+                <span class="pill {% if not observation_only and row.liquidatable_now is sameas true %}warn{% else %}neutral{% endif %}">{% if observation_only %}Observation only{% elif row.liquidatable_now is sameas true %}Condition met{% elif row.liquidatable_now is sameas false %}Watching{% else %}Condition unknown{% endif %}</span>
+                {% if row.health_is_estimate|default(is_base_morpho) %}
+                <small>Estimated health factor (ratio) {{ row.health_factor if row.health_factor is defined and row.health_factor is not none else 'not reported' }}</small><small>{% if row.bps_to_liq is defined and row.bps_to_liq is not none %}Estimated distance {{ row.bps_to_liq }} bps to liquidation{% else %}Estimated liquidation distance not reported{% endif %}</small>
+                {% elif row.protocol in ['Aave V3', 'Aave V4'] %}
+                <small>Health factor {{ row.health_factor if row.health_factor is defined and row.health_factor is not none else 'not reported' }}</small><small>{% if row.bps_to_liq is defined and row.bps_to_liq is not none %}{{ row.bps_to_liq }} bps to liquidation{% else %}Liquidation distance not reported{% endif %}</small>
+                {% else %}
+                <small>{{ row.health_factor or 'Condition not reported' }}</small><small>{{ row.bps_to_liq or 'Liquidity not reported' }}</small>
+                {% endif %}
+              </td>
+              <td>{% if observation_only %}<small>Chain {{ row.chain_id or 'not reported' }} &middot; block {{ row.observation_block if row.observation_block is defined and row.observation_block is not none else 'not reported' }}</small><small>{{ row.observation_utc or 'Observation time not reported' }}</small>{% elif row.protocol == 'Aave V4' %}<small>Oracle heartbeat {{ row.heartbeat_hours_left or 'not reported' }}</small><small>Passive crossing {{ row.passive_hours_left or 'not reported' }}</small>{% else %}<small>{{ row.heartbeat_hours_left or 'Not reported' }}</small><small>{{ row.passive_hours_left or 'Not reported' }}</small>{% endif %}</td>
+              <td>{% if is_base_morpho %}<small>Estimated debt (USDC value): {{ row.repay_summary or 'not reported' }}</small><small>Estimated collateral (USDC value): {{ row.seized_summary or 'not reported' }}</small>{% elif is_paxg %}<small>Market liquidity observation: {{ row.heartbeat_hours_left or 'Available liquidity not reported' }}</small><small>No liquidation quote</small>{% else %}<small>Repay: {{ row.repay_summary or 'not reported' }}</small><small>Seize: {{ row.seized_summary or 'not reported' }}</small>{% endif %}</td>
+              {% set quote = row.quote|default({}, true) %}{% set estimate = quote.estimate|default({}, true) %}{% set historical = row.historical_reference|default({}, true) %}
+              <td>{% if quote.available and not observation_only %}{{ row.surplus_usd }}<small>Current gross quote · pre-gas</small>{% else %}Current quote unavailable{% endif %}{% if historical.available %}<small><strong>${{ historical.modeled_net_usd_display }} modeled net</strong> · historical local fork, not earned</small><small>Original block {{ historical.original_block }} · {{ historical.original_utc }} · +12h fixture</small><small class="mono">{{ historical.original_hash }}</small>{% elif estimate %}<small>{% if estimate.gross_token_amount is not none %}{{ estimate.gross_token_amount }} {{ estimate.gross_token_symbol }}{% elif estimate.gross_usd is not none %}{{ estimate.gross_usd }} USD{% endif %} · stored estimate, not earned</small>{% endif %}</td>
+              <td>{{ 'Not established' if observation_only else (row.executor or 'Not reported') }}<small>Configured implementation · not readiness</small><small>Observed runner: {{ (row.liveness.state if row.liveness is defined else 'UNKNOWN')|title }}</small><small>{{ 'Calldata encoded only' if row.calldata_ready is sameas true and not observation_only else 'Calldata not reported' }}</small>{% if row.readiness_note %}<small>{{ row.readiness_note }}</small>{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="ops-note">Gross surplus is a reported estimate, not net or realized profit. Base debt and collateral are estimated USDC values, not dollar valuations or repay/seize quotes. Encoded calldata is not execution verification. Observations and timing estimates do not establish eligibility, net profit, or authorization.</p>
+      {% else %}<p class="ops-note">No whale targets reported in this snapshot.</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="ops-split">
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">EULER FLEET</p><h4>Fleet deploy status</h4></div><span class="pill {{ (offensive.fleet_deploy.freshness or 'UNKNOWN')|lower }}">{{ (offensive.fleet_deploy.freshness or 'UNKNOWN')|replace('_', ' ')|title }}</span></header>
+        {% if offensive.fleet_deploy.available %}
+        <p class="ops-lede">{{ offensive.fleet_deploy.decision or 'decision not reported' }} &middot; batch {{ offensive.fleet_deploy.batch_id or 'not reported' }}{% if offensive.fleet_deploy.age_text %} &middot; {{ offensive.fleet_deploy.age_text }} old{% endif %}</p>
+        <dl class="batch-facts">
+          {% for d in offensive.fleet_deploy.deploys %}<div><dt>{{ d.label }}</dt><dd>{{ d.address or 'address not reported' }} &middot; {{ d.status or 'status not reported' }}</dd></div>{% else %}<div><dt>Deploys</dt><dd>None reported</dd></div>{% endfor %}
+          {% for v in offensive.fleet_deploy.verification %}<div><dt>{{ v.label }} verify</dt><dd>{{ v.status or 'not reported' }}</dd></div>{% endfor %}
+        </dl>
+        {% else %}<p class="ops-note">Fleet deploy status unavailable or invalid.</p>{% endif %}
+      </div>
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">FASTLANE</p><h4>Head decision</h4></div><span class="pill {{ (offensive.fastlane.freshness or 'UNKNOWN')|lower }}">{{ (offensive.fastlane.freshness or 'UNKNOWN')|replace('_', ' ')|title }}</span></header>
+        {% if offensive.fastlane.available %}
+        <dl class="batch-facts">
+          <div><dt>Head block</dt><dd>{{ offensive.fastlane.head_block if offensive.fastlane.head_block is not none else 'not reported' }}</dd></div>
+          <div><dt>Fired decision</dt><dd>{{ offensive.fastlane.fired_decision or 'not reported' }}</dd></div>
+          <div><dt>Win-probable</dt><dd>{{ offensive.fastlane.win_probable if offensive.fastlane.win_probable is not none else 'not reported' }}{% if offensive.fastlane.candidate_count is not none %} of {{ offensive.fastlane.candidate_count }} routes{% endif %}</dd></div>
+          <div><dt>Scanned</dt><dd>{{ offensive.fastlane.scanned_at or 'not reported' }}{% if offensive.fastlane.age_text %} &middot; {{ offensive.fastlane.age_text }} old{% endif %}</dd></div>
+        </dl>
+        {% else %}<p class="ops-note">Fastlane status unavailable or invalid.</p>{% endif %}
+      </div>
+    </div>
+
+    <div class="ops-split">
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">AUTO-FIRE LOOP</p><h4>Standing loop last attempt</h4></div><span class="pill {{ (offensive.autofire_loop.freshness or 'UNKNOWN')|lower }}">{{ (offensive.autofire_loop.freshness or 'UNKNOWN')|replace('_', ' ')|title }}</span></header>
+        {% if offensive.autofire_loop.available %}
+        <dl class="batch-facts">
+          <div><dt>Verdict</dt><dd>{{ offensive.autofire_loop.verdict or 'not reported' }}{% if offensive.autofire_loop.decision %} &middot; {{ offensive.autofire_loop.decision }}{% endif %}</dd></div>
+          <div><dt>Budget used</dt><dd>{% if offensive.autofire_loop.budget_used.observed_total is not none %}observed {{ offensive.autofire_loop.budget_used.observed_fired if offensive.autofire_loop.budget_used.observed_fired is not none else '&mdash;' }}/{{ offensive.autofire_loop.budget_used.observed_total }}{% else %}not reported{% endif %}{% if offensive.autofire_loop.fired is not none and offensive.autofire_loop.total is not none %} &middot; lock {{ offensive.autofire_loop.fired }}/{{ offensive.autofire_loop.total }}{% endif %}</dd></div>
+          <div><dt>Fastlane</dt><dd>{{ offensive.autofire_loop.fastlane.fired_decision or 'not reported' }}{% if offensive.autofire_loop.fastlane.win_probable is not none %} &middot; {{ offensive.autofire_loop.fastlane.win_probable }} win-probable{% endif %}</dd></div>
+          <div><dt>Scanned</dt><dd>{{ offensive.autofire_loop.scanned_at or 'not reported' }}{% if offensive.autofire_loop.age_text %} &middot; {{ offensive.autofire_loop.age_text }} old{% endif %}</dd></div>
+        </dl>
+        {% else %}<p class="ops-note">Auto-fire loop status unavailable or invalid.</p>{% endif %}
+      </div>
+      <div class="ops-sub">
+        <header><div><p class="eyebrow">SILO DEFAULT WATCH</p><h4>Defaulting keeper watch</h4></div><span class="pill {{ (offensive.silo_watch.freshness or 'UNKNOWN')|lower }}">{{ (offensive.silo_watch.freshness or 'UNKNOWN')|replace('_', ' ')|title }}</span></header>
+        {% if offensive.silo_watch.available %}
+        <dl class="batch-facts">
+          <div><dt>Status</dt><dd>{{ offensive.silo_watch.status or 'not reported' }}{% if offensive.silo_watch.event_flag %} &middot; {{ offensive.silo_watch.event_flag }}{% endif %}</dd></div>
+          <div><dt>Tracked / in-band</dt><dd>{{ offensive.silo_watch.counts.tracked if offensive.silo_watch.counts and offensive.silo_watch.counts.tracked is not none else '&mdash;' }} / {{ offensive.silo_watch.counts.in_band if offensive.silo_watch.counts and offensive.silo_watch.counts.in_band is not none else '&mdash;' }}</dd></div>
+          <div><dt>Scanned</dt><dd>{{ offensive.silo_watch.scanned_at or 'not reported' }}{% if offensive.silo_watch.age_text %} &middot; {{ offensive.silo_watch.age_text }} old{% endif %}</dd></div>
+        </dl>
+        {% else %}<p class="ops-note">Silo default watch status unavailable or invalid.</p>{% endif %}
+      </div>
+    </div>
+
+    <div class="ops-sub">
+      <header><div><p class="eyebrow">DEPLOYED BYTECODE</p><h4>Immutables-masked verification</h4></div><span class="pill {{ (offensive.bytecode.freshness or 'UNKNOWN')|lower }}">{{ (offensive.bytecode.freshness or 'UNKNOWN')|replace('_', ' ')|title }}</span></header>
+      {% if offensive.bytecode.available %}
+      <p class="ops-lede">{{ offensive.bytecode.summary.immutable_masked_matches if offensive.bytecode.summary and offensive.bytecode.summary.immutable_masked_matches is not none else '&mdash;' }} of {{ offensive.bytecode.summary.total if offensive.bytecode.summary and offensive.bytecode.summary.total is not none else '&mdash;' }} contracts match with immutables masked{% if offensive.bytecode.summary and offensive.bytecode.summary.mismatches is not none %} &middot; {{ offensive.bytecode.summary.mismatches }} mismatch{% endif %} &middot; checked {{ offensive.bytecode.checked_at or 'not reported' }}{% if offensive.bytecode.age_text %} &middot; {{ offensive.bytecode.age_text }} old{% endif %}</p>
+      <dl class="batch-facts">
+        {% for label in offensive.bytecode.labels %}<div><dt>{{ label.label }}</dt><dd>{{ label.status or 'not reported' }}{% if label.address %} &middot; {{ label.address }}{% endif %}</dd></div>{% else %}<div><dt>Mask labels</dt><dd>None reported</dd></div>{% endfor %}
+      </dl>
+      {% else %}<p class="ops-note">Deployed bytecode verification unavailable or invalid.</p>{% endif %}
+    </div>
+  </article>
+
+  <article class="ops-card wallets-card" data-wallets aria-labelledby="wallet-title">
+    <header>
+      <div><p class="eyebrow">WALLETS</p><h3 id="wallet-title">Watchlist balances</h3></div>
+      <div class="ops-card-head-side">
+        {% if wallets.available %}<span class="pill {{ wallets.freshness|lower }}">{{ wallets.freshness|replace('_', ' ')|title }}</span><span class="pill neutral">{{ wallets.ok_rows }}/{{ wallets.total_rows }} rows ok</span>{% else %}<span class="pill neutral">NO SNAPSHOT</span>{% endif %}
+        {% if wallets.totals.stable_usd %}<span class="pill stable-total" title="{{ wallets.totals.note or 'Stablecoin USD total' }}">Stable ≈ ${{ wallets.totals.stable_usd }}</span>{% endif %}
+        {% if wallets.totals.total_usd %}<span class="pill wallet-total" title="Portfolio total in USD">Wallet ≈ ${{ wallets.totals.total_usd }}</span>{% endif %}
+        <span class="pill neutral">{{ wallets.watchlist|length }}/20 watched</span>
+      </div>
+    </header>
+    <p class="ops-note"><strong>Read-only connect.</strong> This page requests account addresses only. It never asks for keys or seed phrases, requests no signatures, and sends no transactions. Watchlist changes are written only to <code>coordination/watch-addresses.json</code>.</p>
+    {% if wallets.watchlist %}
+    <div class="wallet-watchlist wallet-summary">
+      <h4>Watched wallets</h4>
+      <ul>
+        {% for item in wallets.watchlist %}<li><span class="watch-label">{{ item.label or 'unlabeled' }}</span>{% if item.family == 'solana' %}<span class="family-tag">solana</span>{% endif %}<code>{{ item.short }}</code>{% if item.total_usd %}<span class="watch-total">Total ≈ ${{ item.total_usd }}</span>{% else %}<span class="watch-total missing">Total not reported</span>{% endif %}<button class="wallet-remove" type="button" data-wallet-remove="{{ item.address }}" data-wallet-family="{{ item.family }}">Remove</button></li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    <div class="wallet-controls">
+      <button class="wallet-button primary" type="button" data-wallet-connect>Connect wallet</button>
+      <button class="wallet-button" type="button" data-wallet-refresh>Refresh balances</button>
+      <span class="collector-state" data-collector-status>Collector {{ 'running' if wallets.collector.running else 'idle' }}{% if wallets.collector.last_error %} · {{ wallets.collector.last_error }}{% elif wallets.collector.last_exit is not none %} · exit {{ wallets.collector.last_exit }}{% endif %}{% if wallets.collector.last_finished %} · finished {{ wallets.collector.last_finished }}{% endif %}</span>
+    </div>
+    <div class="progress collector-progress {% if wallets.collector.running %}running{% elif wallets.collector.last_error %}danger{% elif wallets.collector.last_exit == 0 %}ok{% endif %}" data-collector-bar aria-hidden="true"><span class="bar"></span></div>
+    <form class="wallet-add" data-wallet-add novalidate>
+      <label>Address<input name="address" type="text" autocomplete="off" spellcheck="false" placeholder="0x… or Solana address" aria-label="Watch address"></label>
+      <label>Label (optional)<input name="label" type="text" maxlength="64" autocomplete="off" placeholder="e.g. treasury"></label>
+      <button class="wallet-button primary" type="submit">Add address</button>
+    </form>
+    <div class="wallet-accounts" data-wallet-accounts hidden></div>
+    <p class="wallet-message" data-wallet-message role="alert" hidden></p>
+    <div class="wallet-outcomes" data-wallet-outcomes hidden></div>
+    {% if wallets.empty_reason == 'NO_WATCHLIST' %}
+    <div class="ops-empty"><strong>No watch addresses configured.</strong><p>Use <em>Connect wallet</em> or paste an address above to add one. Nothing is inferred from an empty watchlist.</p></div>
+    {% elif wallets.empty_reason == 'NO_ROWS' %}
+    <div class="ops-empty"><strong>No balance rows reported.</strong><p>Addresses are configured but the balance snapshot contains no rows. No balance is inferred.</p></div>
+    {% elif wallets.empty_reason %}
+    <div class="ops-empty"><strong>Wallet balance snapshot unavailable.</strong><p>{{ wallets.warnings|join(' ') }}. No balance is inferred. Use <em>Refresh balances</em> to run the collector.</p></div>
+    {% else %}
+    <p class="coverage-meta"><span>As of <strong>{{ wallets.as_of }}</strong></span><span>{{ wallets.freshness|replace('_', ' ')|title }}{% if wallets.age_text %} · {{ wallets.age_text }} old{% endif %}</span><span>{{ wallets.total_rows }} row{{ '' if wallets.total_rows == 1 else 's' }} · {{ wallets.error_rows }} error row{{ '' if wallets.error_rows == 1 else 's' }}</span><span>{{ wallets.duration_ms }} ms capture</span>{% if wallets.totals.stable_usd %}<span>Stable total ≈ <strong>${{ wallets.totals.stable_usd }}</strong>{% if wallets.totals.note %} · {{ wallets.totals.note }}{% endif %}</span>{% endif %}{% if wallets.totals.native_usd %}<span>Native total ≈ <strong>${{ wallets.totals.native_usd }}</strong></span>{% endif %}{% if wallets.totals.total_usd %}<span>Portfolio total ≈ <strong>${{ wallets.totals.total_usd }}</strong></span>{% endif %}{% if wallets.totals.unpriced_chains %}<span>Unpriced: {{ wallets.totals.unpriced_chains|join(', ') }}</span>{% endif %}{% if wallets.totals.price_source == 'defillama' %}<span>Natives priced via DefiLlama</span>{% elif wallets.totals.price_source == 'unavailable' %}<span>Native pricing unavailable</span>{% else %}<span>Native price source not reported</span>{% endif %}</p>
+    <div class="wallet-grid">
+      {% for chain in wallets.chains %}
+      <article class="wallet-chain">
+        <header><div><h4>{{ chain.name }}</h4><span class="chain-id">chain {{ chain.chain_id }}</span></div><span class="pill neutral">{{ chain.rows|length }} row{{ '' if chain.rows|length == 1 else 's' }}</span></header>
+        {% for row in chain.rows %}
+        <div class="wallet-row {% if row.error %}error{% endif %}">
+          <div class="wallet-row-head">
+            <strong>{{ row.label or row.short or 'address' }}</strong>
+            {% if row.native %}<span class="wallet-balance">{{ row.native.formatted }}<small>{{ row.native.symbol }}</small>{% if row.native.usd %} <span class="token-usd">≈ ${{ row.native.usd }}</span>{% endif %}</span>{% else %}<span class="pill neutral">No native balance</span>{% endif %}
+          </div>
+          <dl class="wallet-facts">
+            <div><dt>Address</dt><dd>{{ row.short or 'Not reported' }}</dd></div>
+            <div><dt>Block</dt><dd>{{ row.block_number if row.block_number is not none else 'Not reported' }}</dd></div>
+          </dl>
+          {% if row.tokens %}<div class="wallet-tokens">{% for token in row.tokens %}<span class="wallet-token{% if token.formatted == '0' %} zero{% endif %}"><b>{% if token.formatted is not none %}{{ token.formatted }}{% else %}—{% endif %}</b> {{ token.symbol }}{% if token.formatted is none %} <span class="no-data">no data</span>{% endif %}{% if token.usd %} <span class="token-usd">≈ ${{ token.usd }}</span>{% endif %}</span>{% endfor %}</div>{% endif %}
+          {% if row.total_usd %}<p class="wallet-stable">Total ≈ <strong>${{ row.total_usd }}</strong>{% if row.stable_usd_total %} · stable ≈ ${{ row.stable_usd_total }}{% endif %}</p>{% elif row.stable_usd_total %}<p class="wallet-stable">Stable total ≈ <strong>${{ row.stable_usd_total }}</strong></p>{% endif %}
+          {% if row.error %}<p class="ops-note"><strong>Error:</strong> {{ row.error }}</p>{% endif %}
+        </div>
+        {% else %}<p class="ops-lede">No rows reported for this chain.</p>{% endfor %}
+      </article>
+      {% endfor %}
+    </div>
+    {% if wallets.solana %}
+    <div class="wallet-grid">
+      {% for row in wallets.solana %}
+      <article class="wallet-chain solana">
+        <header><div><h4>Solana</h4><span class="chain-id">slot {{ row.slot if row.slot is not none else 'Not reported' }}</span></div><span class="pill neutral">solana</span></header>
+        <div class="wallet-row {% if row.error %}error{% endif %}">
+          <div class="wallet-row-head">
+            <strong>{{ row.label or row.short or 'address' }}</strong>
+            {% if row.native %}<span class="wallet-balance">{{ row.native.formatted }}<small>{{ row.native.symbol }}</small>{% if row.native.usd %} <span class="token-usd">≈ ${{ row.native.usd }}</span>{% endif %}</span>{% else %}<span class="pill neutral">No native balance</span>{% endif %}
+          </div>
+          <dl class="wallet-facts">
+            <div><dt>Address</dt><dd>{{ row.short or 'Not reported' }}</dd></div>
+            <div><dt>Slot</dt><dd>{{ row.slot if row.slot is not none else 'Not reported' }}</dd></div>
+          </dl>
+          {% if row.tokens %}<div class="wallet-tokens">{% for token in row.tokens %}<span class="wallet-token{% if token.formatted == '0' %} zero{% endif %}"><b>{% if token.formatted is not none %}{{ token.formatted }}{% else %}—{% endif %}</b> {{ token.symbol }}{% if token.formatted is none %} <span class="no-data">no data</span>{% endif %}{% if token.usd %} <span class="token-usd">≈ ${{ token.usd }}</span>{% endif %}</span>{% endfor %}</div>{% endif %}
+          {% if row.total_usd %}<p class="wallet-stable">Total ≈ <strong>${{ row.total_usd }}</strong>{% if row.stable_usd_total %} · stable ≈ ${{ row.stable_usd_total }}{% endif %}</p>{% elif row.stable_usd_total %}<p class="wallet-stable">Stable total ≈ <strong>${{ row.stable_usd_total }}</strong></p>{% endif %}
+          {% if row.error %}<p class="ops-note"><strong>Error:</strong> {{ row.error }}</p>{% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if wallets.errors %}
+    <div class="wallet-errors"><h4>Capture errors</h4><ul>{% for error in wallets.errors %}<li><strong>{{ error.scope }}:</strong> {{ error.message }}</li>{% endfor %}</ul></div>
+    {% endif %}
+    {% endif %}
+  </article>
+</section>
+
+
+<section class="secondary-section base-paper" aria-labelledby="base-paper-title">
+  <div class="section-heading"><div><p class="eyebrow">ORDINARY MARKET RESEARCH</p><h2 id="base-paper-title">Base paper studies</h2></div><p>One-shot finalized observations, not continuously refreshed quotes or realized profit.</p></div>
+  <div class="research-card-grid">
+    {% for card in data.base_paper %}
+    <article class="research-card">
+      <header><div><p class="eyebrow">BASE {{ card.study }}</p><h3>{{ card.status|replace('_', ' ') }}</h3></div><span class="pill neutral">{{ card.freshness|replace('_', ' ')|title }}</span></header>
+      <p>{{ card.route }}</p><p class="quiet-copy"><code>{{ card.artifact }}</code></p>
+      {% if not card.available %}<p>Artifact missing or invalid.{% if card.cached %} Cached evidence is withheld, not presented as current.{% endif %} No result inferred.</p>
+      {% else %}
+      <p>Generated {{ card.generated_at }} · {{ card.age|int }} seconds old. {{ card.code|replace('_', ' ') }}.</p>
+      {% if card.rows %}
+      <dl class="chain-facts">
+        <div><dt>Best quoted change before gas</dt><dd>{{ card.best_quoted_change_usdc }} USDC at {{ card.best_input_usdc }} USDC input</dd></div>
+        <div><dt>Conservative net</dt><dd>Unknown: full costs and transfers unverified</dd></div>
+        <div><dt>Finalized observation</dt><dd>Block {{ card.block }} · {{ card.pin_freshness|replace('_', ' ')|title }} · {{ card.pin_age|int }} seconds old</dd></div>
+        <div><dt>Source / runtime binding</dt><dd>{{ card.source_runtime_bound|title }}</dd></div>
+        <div><dt>Provider evidence</dt><dd>{{ card.provider_families }} operator families agree; upstream independence unproven</dd></div>
+        <div><dt>Payout balance / allowance</dt><dd>{% if card.preview_balances_sufficient %}Recorded balances cover tested previews{% else %}Not all tested previews fit recorded balances{% endif %}; not transfer proof</dd></div>
+      </dl>
+      <details><summary>Show six-size quote table</summary><div class="table-wrap" aria-label="Six-size quotes" role="region" tabindex="0"><table><thead><tr><th scope="col">Input USDC</th><th scope="col">Quoted output USDC</th><th scope="col">Change before gas</th></tr></thead><tbody>{% for row in card.rows %}<tr><td>{{ row.input_usdc }}</td><td>{{ row.output_usdc }}</td><td>{{ row.quoted_change_usdc }}</td></tr>{% endfor %}</tbody></table></div></details>
+      <p>Pool fees and price impact are already included. Other costs are incomplete; USDC amounts are not independently valued USD.</p>
+      <p><strong>Next gate:</strong> {{ card.next_gate }}.</p>
+      {% else %}<p>Observation incomplete; quote economics and capacity are not reported.</p>{% endif %}
+      {% endif %}
+      <p class="quiet-copy">profitabilityClaim: false · executableNow: unknown · signing disabled</p>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+{% if data.no_current_live_status %}<section class="notice archive-notice" role="status"><strong>No current legacy monitor status.</strong> Historical monitor artifacts are kept below for context and do not establish a current operational watch.</section>{% endif %}
+
+<details id="audit-state-details" class="secondary-section current-audit"{% if audit.available and audit.freshness in ['FRESH', 'AGING'] %} open{% endif %}>
+  <summary><span><span class="eyebrow">CURRENT AUDIT STATE</span><strong>Current audit state{% if audit.available %} · {{ audit.freshness|lower|title }}{% endif %}</strong></span><span class="summary-hint">Show evidence</span></summary>
+  <div class="details-body">
+  {% if audit.available %}
+    <div class="stale-callout {% if audit.freshness == 'STALE' %}is-stale{% endif %}"><strong>{{ audit.overall|replace('_', ' ') }}</strong><span>Generated {{ audit.generated_at }} · {{ audit.freshness|replace('_', ' ')|title }}{% if audit.age is not none %} · {{ audit.age|int }} seconds old{% endif %}.</span>{% if audit.freshness == 'STALE' %}<p>This audit artifact is historical context, not the current operational state; it is not an inference from stale monitor artifacts.</p>{% endif %}</div>
+    <div class="table-wrap" aria-label="Current audit candidates" role="region" tabindex="0"><table><thead><tr><th scope="col">Candidate</th><th scope="col">Current state</th><th scope="col">Reason / reopen condition</th></tr></thead><tbody>{% for candidate in audit.candidates %}<tr><td>{{ candidate.name }}</td><td><span class="pill {% if candidate.status == 'WATCH_TRIGGER' %}watch{% else %}neutral{% endif %}">{{ candidate.status|replace('_', ' ') }}</span></td><td>{{ candidate.detail }}</td></tr>{% endfor %}</tbody></table></div>
+    <p class="quiet-copy">Action gates remain closed: route positive false · executable now false · signed action justified false.</p><dl class="chain-facts"><div><dt>Next command</dt><dd>Not provided</dd></div></dl>
+  {% else %}<p class="research-warning"><strong>Current audit summary unavailable.</strong> The local summary artifact is missing or invalid. Monitor artifacts are not used as a substitute.</p>{% endif %}
+  </div>
+</details>
+
+<details id="supporting-evidence-details" class="secondary-section">
+  <summary><span><span class="eyebrow">SUPPORTING TRIGGER EVIDENCE</span><strong>STEX, EtherFi, and Lista</strong></span><span class="summary-hint">Show evidence</span></summary>
+  <div class="details-body"><p class="section-intro">These are read-only producer records. Missing values remain not reported; no row authorizes execution.</p>
+    <div class="table-wrap" aria-label="STEX trigger evidence" role="region" tabindex="0"><table><thead><tr><th scope="col">STEX trigger evidence</th><th scope="col">Current evidence</th></tr></thead><tbody><tr><td>Trigger / freshness</td><td>{% if data.stex_profit_trigger.available %}{{ data.stex_profit_trigger.status }} · {{ data.stex_profit_trigger.evidence_class }} · checked {{ data.stex_profit_trigger.generated_at }} · {{ data.stex_profit_trigger.freshness|replace('_', ' ')|title }}{% else %}STEX trigger evidence is unavailable.{% endif %}</td></tr>{% if data.stex_profit_trigger.available %}<tr><td>Paused / pending / active rows</td><td>{{ data.stex_profit_trigger.paused if data.stex_profit_trigger.paused is not none else 'Not reported' }} / {{ data.stex_profit_trigger.pending_count if data.stex_profit_trigger.pending_count is not none else 'Not reported' }} / {{ data.stex_profit_trigger.active_rows if data.stex_profit_trigger.active_rows is not none else 'Not reported' }}</td></tr><tr><td>Economics</td><td>{{ data.stex_profit_trigger.economics.status }}{% for name, value in data.stex_profit_trigger.economics.raw %} · {{ name }}: {{ value if value is not none else 'Not reported' }}{% endfor %}</td></tr>{% endif %}</tbody></table></div>
+    <div class="table-wrap" aria-label="EtherFi DebtManager trigger evidence" role="region" tabindex="0"><table><thead><tr><th scope="col">EtherFi DebtManager readiness</th><th scope="col">Current evidence</th></tr></thead><tbody><tr><td>Trigger / freshness</td><td>{% if data.etherfi_debtmanager_profit_trigger.available %}{{ data.etherfi_debtmanager_profit_trigger.status }} · {{ data.etherfi_debtmanager_profit_trigger.reason }} · positive: {{ data.etherfi_debtmanager_profit_trigger.positive }}{% else %}Not reported; trigger artifact unavailable.{% endif %}</td></tr>{% if data.etherfi_debtmanager_profit_trigger.available %}<tr><td>Pool evidence</td><td>{% if data.etherfi_debtmanager_profit_trigger.pool_evidence_complete %}Pool evidence is complete.{% else %}Not reported: evidence incomplete; zero placeholders are not observations.{% endif %}</td></tr><tr><td>Economics</td><td>{{ data.etherfi_debtmanager_profit_trigger.economics.status }}{% for name, value in data.etherfi_debtmanager_profit_trigger.economics.raw %} · {{ name }}: {{ value if value is not none else 'Not reported' }}{% endfor %}</td></tr>{% if data.etherfi_debtmanager_profit_trigger.diagnostics %}<tr><td>Phase diagnostics</td><td>state {{ data.etherfi_debtmanager_profit_trigger.diagnostics.stateSuccesses }}/{{ data.etherfi_debtmanager_profit_trigger.diagnostics.stateAttempts }} · failure {{ data.etherfi_debtmanager_profit_trigger.diagnostics.failurePhase }}/{{ data.etherfi_debtmanager_profit_trigger.diagnostics.failureCode }}</td></tr>{% endif %}{% endif %}</tbody></table></div>
+    <div class="table-wrap" aria-label="Lista auction-reset trigger evidence" role="region" tabindex="0"><table><thead><tr><th scope="col">Lista auction-reset readiness</th><th scope="col">Current evidence</th></tr></thead><tbody><tr><td>Trigger / freshness</td><td>{% if data.lista_auction_incentive_profit_trigger.available %}{{ data.lista_auction_incentive_profit_trigger.status }} · {{ data.lista_auction_incentive_profit_trigger.reason }} · positive: {{ data.lista_auction_incentive_profit_trigger.positive }}{% else %}Not reported; trigger artifact unavailable.{% endif %}</td></tr>{% if data.lista_auction_incentive_profit_trigger.available %}<tr><td>Controls / auctions</td><td>Public caller {{ data.lista_auction_incentive_profit_trigger.controls.publicAuctionCaller }} · active {{ data.lista_auction_incentive_profit_trigger.auctions.activeCount }}</td></tr><tr><td>Economics</td><td>{{ data.lista_auction_incentive_profit_trigger.economics.status }}{% if data.lista_auction_incentive_profit_trigger.economics.reported %}{% for name, value in data.lista_auction_incentive_profit_trigger.economics.raw %} · {{ name }}: {{ value if value is not none else 'Not reported' }}{% endfor %}{% else %} · Not reported: no active auction or economics run.{% endif %}</td></tr>{% endif %}</tbody></table></div>
+  </div>
+</details>
+
+<details id="research-details" class="secondary-section research-cards">
+  <summary><span><span class="eyebrow">FRESH REJECT-ONLY RESEARCH</span><strong>R17, R19, and R20 evidence</strong></span><span class="summary-hint">Show research</span></summary>
+  <div class="details-body"><p class="section-intro">These fresh scans are research records, not opportunities or execution instructions. Their REJECT status remains in force.</p><div class="research-card-grid">
+  {% for label, card in research_cards %}
+    {% set funnel = card.rejection_funnel|default(card.funnel|default({}, true), true) %}
+    {% set gates = card.kill_gates|default(card.gates|default(card.active_rejects|default([], true), true), true) %}
+    <article class="research-card"><header><div><p class="eyebrow">POLYMARKET {{ label }}</p><h3>{{ card.status|default('REJECT', true)|replace('_', ' ') }}</h3></div><span class="pill neutral">{{ card.freshness|default('Unknown', true)|replace('_', ' ')|title }}</span></header><p>{{ card.reason|default('No normalized reason reported.', true)|replace('-', ' ') }}</p>
+      <dl class="funnel-grid" aria-label="{{ label }} rejection funnel">{% for item_label, value in funnel.items() if value is not mapping and (value is not sequence or value is string) %}<div><dt>{{ item_label|replace('_', ' ')|replace('Scans', ' scans')|title }}</dt><dd>{{ value if value is not none else 'Not reported' }}</dd></div>{% else %}<div><dt>Funnel evidence</dt><dd>Not reported</dd></div>{% endfor %}</dl>
+      <div class="gate-copy"><strong>Active gates</strong>{% if gates %}<ul>{% for gate in gates %}<li>{{ gate.name|default(gate.code|default(gate, true), true)|replace('_', ' ')|title }}{% if gate.status is defined and gate.status is not none %} · {{ gate.status|replace('_', ' ') }}{% endif %}</li>{% endfor %}</ul>{% else %}<p>No active gate entries were reported. This does not make the REJECT status actionable.</p>{% endif %}</div>
+    </article>
+  {% endfor %}</div></div>
+</details>
+
+<details id="watch-registry-details" class="secondary-section">
+  <summary><span><span class="eyebrow">RESEARCH WATCH PIPELINE</span><strong>Watch registry</strong></span><span class="summary-hint">Show registry</span></summary>
+  <div class="details-body research-grid">{% if not data.producer_health.research_watch_current_read %}<p class="research-warning"><strong>Research registry unavailable or cached.</strong> Empty lanes do not mean there are no research watches.</p>{% endif %}{% for group, label in [('active','Active watch'),('change_triggers','Change trigger'),('scheduled','Scheduled review'),('hold','Hold'),('suppressed','Suppressed'),('incomplete','Incomplete evidence')] %}<article class="watch-lane {{ group }}"><header><h3>{{ label }}</h3><span>{{ data.research_watches[group]|length }}</span></header>{% for w in data.research_watches[group] %}<div class="watch-item"><h4>{{ w.protocol }}</h4><p>{{ w.reason }}</p><dl><div><dt>Trigger</dt><dd>{{ w.trigger }}</dd></div><div><dt>Evidence</dt><dd>{{ w.source_count }} source{{ '' if w.source_count == 1 else 's' }} · {{ w.status|lower|title }}</dd></div></dl></div>{% else %}<p class="empty-lane">No entries reported.</p>{% endfor %}</article>{% endfor %}</div>
+</details>
+
+<details id="venus-state-details" class="secondary-section">
+  <summary><span><span class="eyebrow">VENUS PSR / MULTICHAIN</span><strong>Finalized state comparison</strong></span><span class="summary-hint">Show comparison</span></summary>
+  <div class="details-body">{% if data.producer_health.venus_psr_current_read %}<p class="section-intro">Drift is a comparison result, not an exploit or route-positive claim. Single-provider evidence; not independently corroborated.</p><div class="evidence-grid">{% for m in data.monitors if m.id in ('venus-psr-bnb-drift', 'venus-psr-ethereum-drift', 'venus-psr-arbitrum-drift') %}{% if m.id == 'venus-psr-bnb-drift' %}{% set chain = 'BNB Chain' %}{% elif m.id == 'venus-psr-ethereum-drift' %}{% set chain = 'Ethereum' %}{% else %}{% set chain = 'Arbitrum' %}{% endif %}<div><dt>{{ chain }}</dt><dd>{% if m.observation == 'TRIGGERED' %}Drift confirmed (single-provider){% elif m.observation == 'ERROR' %}Read error — status not confirmed{% elif m.observation == 'CLEAR' %}No drift observed{% else %}Status unavailable{% endif %}</dd><p>Current finalized block: {{ m.current_block|default('Not reported', true) }} · Baseline block: {{ m.baseline_block|default('Not reported', true) }}</p></div>{% endfor %}</div>{% else %}<p class="venus-empty"><strong>No current Venus producer state</strong> Start the authorized local producer, then refresh this page. Until then, no chain status is inferred.<br><code>./tools/start-dashboard-live.ps1 -UseAuthorizedInventory</code></p>{% endif %}</div>
+</details>
+
+<details id="legacy-monitors-details" class="secondary-section legacy-section">
+  <summary><span><span class="eyebrow">LEGACY MONITOR INVENTORY</span><strong>Historical monitor status</strong></span><span class="summary-hint">Show inventory</span></summary>
+  <div class="details-body"><p class="section-intro">Current alarms require current source-backed evidence. Historical alarms remain recorded context.</p><section class="stats" aria-label="Monitor totals">{% for key,value in data.counts.items() %}<div><b>{{ value }}</b><span>{{ key|replace('_',' ') }}</span></div>{% endfor %}</section><nav class="filters" aria-label="Disposition filters"><a href="/" class="{% if not selected %}active{% endif %}"{% if not selected %} aria-current="page"{% endif %}>All</a>{% for key in data.counts %}{% if key != 'DISCARD' %}<a href="/?disposition={{ key }}" class="{% if selected == key %}active{% endif %}"{% if selected == key %} aria-current="page"{% endif %}>{{ key|replace('_',' ') }}</a>{% endif %}{% endfor %}</nav><div class="table-wrap" aria-label="Monitor status table" role="region" tabindex="0"><table><thead><tr><th scope="col">Monitor</th><th scope="col">Disposition</th><th scope="col">Status</th><th scope="col">Status source</th><th scope="col">Status at</th><th scope="col">Freshness</th><th scope="col">Alarm</th></tr></thead><tbody>{% for m in data.monitors if not selected or m.disposition == selected %}<tr><td><a href="/monitors/{{m.id}}">{{m.name}}</a><small>{{m.note}}</small></td><td><span class="pill neutral">{{m.disposition|replace('_',' ')}}</span></td><td><span class="pill {{m.status|lower}}">{{m.status}}</span></td><td>{{m.status_source}}</td><td>{{m.status_at or 'Not reported'}}</td><td><span class="pill {{m.freshness|lower}}">{{m.freshness}}</span></td><td>{{m.alarm}}</td></tr>{% endfor %}</tbody></table></div></div>
+</details>
+{% endblock %}

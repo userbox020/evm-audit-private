@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+"use strict";
+
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const ROOT = path.resolve(__dirname, "..");
+const NAME = "critical-etherfi-cash-withdrawal-token-deployment-binding";
+const RAW = `reports/raw/fast/${NAME}.json`;
+const MANIFEST = `reports/raw/fast/${NAME}-manifest.json`;
+const abs = (rel) => path.join(ROOT, rel);
+const sha = (data) => crypto.createHash("sha256").update(data).digest("hex");
+const check = (ok, message) => { if (!ok) throw new Error(message); };
+const hashFile = (rel) => { const data = fs.readFileSync(abs(rel)); return { path: rel, bytes: data.length, sha256: sha(data) }; };
+
+const raw = JSON.parse(fs.readFileSync(abs(RAW), "utf8"));
+const manifest = JSON.parse(fs.readFileSync(abs(MANIFEST), "utf8"));
+check(typeof raw.classification === "string" && raw.classification.startsWith("INFORMATIONAL/"), "classification drift");
+check(raw.pin.chainId === 10 && raw.pin.finalized && raw.pin.number > 0 && /^0x[0-9a-f]{64}$/.test(raw.pin.hash), "fixed pin invalid");
+check(raw.providerCoverage.qualifiedFamilyCount >= 2 && raw.providerCoverage.exactHeaderFamilyCount >= 2 && raw.providerCoverage.exactDecodedStateFamilyCount === 2, "provider threshold incomplete");
+check(raw.providerCoverage.endpointUrlsPersisted === false && raw.providerCoverage.endpointDomainsPersisted === false, "endpoint persistence drift");
+check(raw.terminalRecheck.length === 2 && raw.terminalRecheck.every((x) => x.sameNumberHashMatch), "terminal hash recheck failed");
+check(raw.source.productionSourceDiffAgainstCommit.length === 0 && raw.source.runtimeComparisons.length === 3 && raw.source.etherFiSafeExactRuntime, "source/runtime evidence incomplete");
+check(raw.source.allMetadataNormalizedRuntimeContinuity === raw.source.runtimeComparisons.every((x) => x.metadataNormalizedRuntimeMatch), "runtime continuity assessment drift");
+check(raw.deployment.cashModule.address.toLowerCase() === raw.deployment.dataProvider.getCashModule.toLowerCase(), "CashModule/DataProvider linkage mismatch");
+check(raw.deployment.cashModule.dataProvider.toLowerCase() === raw.deployment.dataProvider.address.toLowerCase() && raw.deployment.dataProvider.cashIsDefaultModule, "DataProvider/default linkage mismatch");
+check(raw.deployment.safeLinkage.factory && raw.deployment.safeLinkage.beacon && raw.deployment.safeLinkage.implementation, "Safe linkage incomplete");
+check(raw.configuredWithdrawalTokenCount === raw.tokens.length && raw.tokens.length > 0, "withdrawal-token enumeration incomplete");
+check(raw.configurationDrift.activeTokenCount === raw.tokens.length && raw.configurationDrift.localDeclaredResolvableTokenCount > 0, "configuration drift matrix incomplete");
+check(new Set(raw.tokens.map((x) => x.address.toLowerCase())).size === raw.tokens.length, "duplicate withdrawal token");
+check(raw.tokens.every((x) => Number.isInteger(x.decimals) && x.runtime.effectiveRuntime.bytes > 0 && x.behavior.transfers.length >= 1 && x.behavior.transferFrom.length === 1), "token metadata/runtime/behavior row incomplete");
+check(raw.forkTests.passCount === 5 && raw.forkTests.failCount === 0 && raw.forkTests.totalBehaviorProbeCount === raw.forkTests.transferProbeCount + raw.forkTests.transferFromProbeCount, "fork test gate failed");
+check(raw.forkTests.dealtEphemeralBalancesOnly && !raw.forkTests.productionMutation, "fork safety drift");
+check(raw.behaviorSummary.attackerGainRaw === "0" && raw.tokens.every((x) => x.behavior.attackerGainRaw === "0"), "attacker-gain drift");
+check(raw.behaviorSummary.incompleteDeliveryObservedCount === raw.tokens.filter((x) => x.behavior.incompleteDeliveryObserved).length && raw.behaviorSummary.behaviorUnresolvedCount === raw.tokens.filter((x) => x.behavior.classification === "coverage-unresolved").length, "behavior summary drift");
+check(raw.conclusion.advances === false && raw.conclusion.extractionPipeline === "0/5_NO_ATTACKER_VALUE_PATH" && raw.conclusion.globalHighestPipeline === "DebtManager donation 2/5 WATCH unchanged", "pipeline drift");
+check(raw.conclusion.routePositive === 0 && raw.conclusion.executableNow === 0 && !raw.conclusion.signedActionJustified, "route gate drift");
+check(raw.safety.readOnlyRpc && raw.safety.localFork && raw.safety.dealtEphemeralBalancesOnly && !raw.safety.liveTransactions && !raw.safety.signedActions && !raw.safety.broadcasts && !raw.safety.productionMutation && !raw.safety.realFunds && !raw.safety.keysRead, "safety drift");
+check(!/https?:\/\//i.test(JSON.stringify(raw)) && !/https?:\/\//i.test(JSON.stringify(manifest)), "endpoint leak");
+const current = manifest.records.map((record) => { const row = hashFile(record.path); check(row.bytes === record.bytes && row.sha256 === record.sha256, `manifest drift: ${record.path}`); return row; });
+const aggregate = sha(current.map((x) => `${x.path}\0${x.bytes}\0${x.sha256}`).join("\n"));
+check(aggregate === manifest.aggregateSha256 && manifest.runId === raw.runId, "manifest aggregate/run drift");
+console.log(JSON.stringify({ ok: true, validations: 23, runId: raw.runId, classification: raw.classification, pin: raw.pin, tokenCount: raw.tokens.length, standardBoolExact: raw.behaviorSummary.standardBoolExactCount, noReturnExact: raw.behaviorSummary.noReturnExactCount, falseReturnObserved: raw.behaviorSummary.falseReturnObservedCount, feeOrPartialObserved: raw.behaviorSummary.feeOrPartialObservedCount, unresolved: raw.behaviorSummary.behaviorUnresolvedCount, forkTests: raw.forkTests.passCount, behaviorProbes: raw.forkTests.totalBehaviorProbeCount, branchPipeline: raw.conclusion.branchPipeline, globalHighestPipeline: raw.conclusion.globalHighestPipeline, manifestAggregateSha256: aggregate }, null, 2));

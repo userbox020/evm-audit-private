@@ -1,0 +1,19 @@
+{
+  "name": "__evm_audit",
+  "version": "1.0.0",
+  "description": "Profile-based audit runner for Solidity, Vyper, bytecode, formal verification, fuzzing, and runtime-monitoring workflows.",
+  "main": "index.js",
+  "scripts": {
+    "test": "npm run test:monitor && npm run test:dashboard",
+    "test:monitor": "node --test tools/test/endpoint-safety.test.js tools/test/monitor-alert-lifecycle.test.js tools/test/monitor-artifact-freshness.test.js tools/test/monitor-e25.test.js tools/test/monitor-registry.test.js tools/test/monitor-safety.test.js tools/test/monitor-supervisor.test.js tools/test/monitor-transitive-safety.test.js tools/test/monitor-ws-resolver.test.js tools/test/monitor-rearm-upgrade-config.test.js tools/test/monitor-oracle-divergence.test.js tools/test/canary-strike-eligibility.test.js tools/test/check-paxg-funding-call.test.js tools/test/paxg-exact-actions.test.js tools/test/run-fork-poc-bounded-gas.test.js tools/test/morpho-find-liquidatable.test.js",
+    "test:dashboard": "set PYTEST_DISABLE_PLUGIN_AUTOLOAD=1&& python -m pytest tests/dashboard -q",
+    "test:unit-audit": "node --test tools/test/unit-audit-integrity.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@mysten/sui": "^2.17.0"
+  }
+}

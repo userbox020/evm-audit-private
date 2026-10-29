@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Alarms · Watchboard{% endblock %}
+{% block content %}
+<section class="hero compact"><p class="eyebrow">APPEND-ONLY EVENT LOG</p><h1>Alarms</h1><p class="lede">Current alarms need fresh source-backed evidence. Historical events are context, not actionable status.</p></section>
+<section class="notice quiet" role="note"><strong>Read-only history.</strong> This page records local evidence only. It offers no signing, broadcast, or mutation controls.</section>
+<section class="section-heading"><div><p class="eyebrow">CURRENT ALARMS</p><h2>{{ data.current_alarms|length }} current</h2></div><p>Only fresh, source-backed alarms appear here.</p></section>
+<section class="alarm-grid" aria-label="Current alarms">{% for a in data.current_alarms %}<article class="alarm"><div class="alarm-top"><span class="pill {{a.severity|lower}}">{{a.severity}}</span><span class="alarm-state">{{a.alarm}}</span></div><h2>{{a.condition}}</h2><p>{{a.message}}</p><small>{{a.freshness}}{% if a.event_at %} · {{a.event_at}}{% endif %}</small></article>{% else %}<p>No current alarms.</p>{% endfor %}</section>
+<section class="section-heading"><div><p class="eyebrow">HISTORICAL CONTEXT</p><h2>{{ data.historical_alarms|length }} historical</h2></div><p>Historical alarms are not actionable now.</p></section>
+<section class="alarm-grid" aria-label="Historical alarms">{% for a in data.historical_alarms %}<article class="alarm"><div class="alarm-top"><span class="pill {{a.severity|lower}}">{{a.severity}}</span><span class="alarm-state">{{a.alarm}} · NOT ACTIONABLE NOW</span></div><h2>{{a.condition}}</h2><p>{{a.message}}</p>{% if a.categories %}<p class="categories">{{a.categories|join(', ')}}</p>{% endif %}<small>{{a.freshness}}{% if a.event_at %} · {{a.event_at}}{% endif %}</small></article>{% else %}<p>No historical alarm records are available.</p>{% endfor %}</section>
+{% endblock %}

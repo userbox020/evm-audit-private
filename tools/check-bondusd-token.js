@@ -1,0 +1,11 @@
+const{ethers}=require("ethers");const{rpcCall,resolveRpc}=require("./shared-rpc");
+(async()=>{const rpc=await resolveRpc(1);const B="0x8413D2a624A9fA8b6D3eC7b22CF7F62E55D6Bc83";
+const VLT=new ethers.Interface(["function convertToAssets(uint256) view returns (uint256)","function asset() view returns (address)","function totalAssets() view returns (uint256)"]);
+const[rate,asset]=await Promise.all([rpcCall(rpc,"eth_call",[{to:B,data:VLT.encodeFunctionData("convertToAssets",[10n**18n])},"latest"],8000),rpcCall(rpc,"eth_call",[{to:B,data:VLT.encodeFunctionData("asset",[])},"latest"],8000)]);
+const r=rate&&rate!=="0x"?Number(ethers.formatUnits(VLT.decodeFunctionResult("convertToAssets",rate)[0],18)):null;
+const a=asset&&asset!=="0x"?VLT.decodeFunctionResult("asset",asset)[0]:null;
+const O="0x1b4A3F92e5Fffd1d35A98751c9FE4472483579bB";
+const MP=new ethers.Interface(["function price() view returns (uint256)"]);
+const pr=await rpcCall(rpc,"eth_call",[{to:O,data:MP.encodeFunctionData("price",[])},"latest"],8000);
+const op=Number(ethers.formatUnits(MP.decodeFunctionResult("price",pr)[0],36));
+console.log(JSON.stringify({BONDUSD_convertToAssets:r?.toFixed(8),oracle_price:op.toFixed(8),asset:a?.slice(0,12),match:r&&Math.abs(r-op)<0.01?"YES - oracle reads BONDUSD ERC4626 rate":"different",risk:r&&Math.abs(r-op)<0.01?"LOW - standard ERC4626 oracle":"MEDIUM - custom oracle, needs deeper trace"},null,2))})().catch(e=>console.error(e.message));
